@@ -312,11 +312,20 @@ private struct PolicyTextView: View {
 }
 
 private struct AppInfoView: View {
+    private var versionText: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+    }
+
+    private var buildNumberText: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"
+    }
+
     var body: some View {
         List {
             Section {
                 LabeledContent("アプリ名", value: "医師給与ノート")
-                LabeledContent("バージョン", value: "0.5")
+                LabeledContent("バージョン", value: versionText)
+                LabeledContent("ビルド", value: buildNumberText)
             }
 
             Section {
