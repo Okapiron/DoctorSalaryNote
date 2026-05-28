@@ -13,10 +13,10 @@ struct ContentView: View {
             PayRecordListView()
                 .tabItem {
                     Label("明細", systemImage: "list.bullet.rectangle")
-                }
+            }
 
             NavigationStack {
-                DocumentsPlaceholderView()
+                DocumentListView()
             }
             .tabItem {
                 Label("書類", systemImage: "doc.text")

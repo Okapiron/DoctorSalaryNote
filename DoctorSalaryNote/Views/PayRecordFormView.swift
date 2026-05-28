@@ -11,6 +11,10 @@ struct PayRecordFormView: View {
         SortDescriptor(\Employer.name)
     ]) private var employers: [Employer]
 
+    @Query(sort: [
+        SortDescriptor(\DocumentAttachment.createdAt, order: .reverse)
+    ]) private var documentAttachments: [DocumentAttachment]
+
     private let payRecord: PayRecord?
 
     @State private var selectedEmployerID: PersistentIdentifier?
@@ -51,6 +55,17 @@ struct PayRecordFormView: View {
 
     private var selectedEmployer: Employer? {
         employers.first { $0.persistentModelID == selectedEmployerID }
+    }
+
+    private var linkedDocuments: [DocumentAttachment] {
+        guard let payRecord else {
+            return []
+        }
+
+        return documentAttachments.filter {
+            $0.payRecord?.persistentModelID == payRecord.persistentModelID &&
+            ($0.documentType == .payslip || $0.documentType == .bonusPayslip)
+        }
     }
 
     var body: some View {
@@ -107,6 +122,35 @@ struct PayRecordFormView: View {
             Section("メモ") {
                 TextEditor(text: $memo)
                     .frame(minHeight: 120)
+            }
+
+            if let payRecord {
+                Section("添付書類") {
+                    if linkedDocuments.isEmpty {
+                        Text("この明細に紐づく書類はまだありません。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(linkedDocuments) { document in
+                            NavigationLink {
+                                DocumentFormView(document: document)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(document.documentType.label)
+                                    Text(document.originalFileName ?? "ファイル名未設定")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    NavigationLink {
+                        DocumentFormView(linkedPayRecord: payRecord)
+                    } label: {
+                        Label("書類を添付", systemImage: "paperclip")
+                    }
+                }
             }
 
             if let validationMessage {

@@ -259,11 +259,11 @@ struct HomeSummaryView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text("源泉徴収票・支払調書の登録状況は、書類管理機能で確認できる予定です。")
+            Text("源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Text("Phase 5で実装予定")
+            Text("年別・勤務先別に整理できます")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

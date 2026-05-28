@@ -47,9 +47,9 @@ enum IncomeCategory: String, CaseIterable, Codable, Identifiable {
 
 enum DocumentType: String, CaseIterable, Codable, Identifiable {
     case payslip
+    case bonusPayslip
     case withholdingSlip
     case paymentStatement
-    case employmentContract
     case other
 
     var id: String { rawValue }
@@ -57,11 +57,19 @@ enum DocumentType: String, CaseIterable, Codable, Identifiable {
     var label: String {
         switch self {
         case .payslip: "給与明細"
+        case .bonusPayslip: "賞与明細"
         case .withholdingSlip: "源泉徴収票"
         case .paymentStatement: "支払調書"
-        case .employmentContract: "雇用契約書"
         case .other: "その他"
         }
+    }
+
+    var requiresPayRecord: Bool {
+        self == .payslip || self == .bonusPayslip
+    }
+
+    var requiresEmployer: Bool {
+        self == .withholdingSlip || self == .paymentStatement
     }
 }
 
@@ -201,12 +209,15 @@ final class PayRecord {
 @Model
 final class DocumentAttachment {
     var employer: Employer?
+    var payRecord: PayRecord?
     var documentYear: Int
     var documentTypeRaw: String
     var title: String
     var attachmentFileTypeRaw: String
+    var localFilePath: String?
     var originalFileName: String?
     var storedFileName: String?
+    var mimeType: String?
     var fileSize: Int?
     var memo: String
     var createdAt: Date
@@ -214,24 +225,30 @@ final class DocumentAttachment {
 
     init(
         employer: Employer? = nil,
+        payRecord: PayRecord? = nil,
         documentYear: Int,
         documentType: DocumentType = .payslip,
         title: String = "",
         attachmentFileType: AttachmentFileType = .other,
+        localFilePath: String? = nil,
         originalFileName: String? = nil,
         storedFileName: String? = nil,
+        mimeType: String? = nil,
         fileSize: Int? = nil,
         memo: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.employer = employer
+        self.payRecord = payRecord
         self.documentYear = documentYear
         self.documentTypeRaw = documentType.rawValue
         self.title = title
         self.attachmentFileTypeRaw = attachmentFileType.rawValue
+        self.localFilePath = localFilePath
         self.originalFileName = originalFileName
         self.storedFileName = storedFileName
+        self.mimeType = mimeType
         self.fileSize = fileSize
         self.memo = memo
         self.createdAt = createdAt
