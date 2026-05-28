@@ -117,12 +117,12 @@ struct AnalysisView: View {
     }
 
     private var incomeCategorySummaries: [BreakdownSummary] {
-        IncomeCategory.allCases.compactMap { category in
-            let records = selectedRecords.filter { $0.incomeCategory == category }
+        IncomeCategoryAnalysisGroup.allCases.compactMap { group in
+            let records = selectedRecords.filter { group.categories.contains($0.incomeCategory) }
             guard !records.isEmpty else {
                 return nil
             }
-            return BreakdownSummary(label: category.label, records: records)
+            return BreakdownSummary(label: group.label, records: records)
         }
         .sorted {
             if $0.grossTotal == $1.grossTotal {
@@ -531,6 +531,49 @@ private enum AmountKind {
             "手取り"
         case .deduction:
             "控除"
+        }
+    }
+}
+
+private enum IncomeCategoryAnalysisGroup: CaseIterable {
+    case fullTimeSalary
+    case partTimeSalary
+    case duty
+    case spot
+    case bonus
+    case other
+
+    var label: String {
+        switch self {
+        case .fullTimeSalary:
+            "常勤給与"
+        case .partTimeSalary:
+            "外勤"
+        case .duty:
+            "当直・日当直"
+        case .spot:
+            "スポット"
+        case .bonus:
+            "賞与"
+        case .other:
+            "その他"
+        }
+    }
+
+    var categories: [IncomeCategory] {
+        switch self {
+        case .fullTimeSalary:
+            [.fullTimeSalary]
+        case .partTimeSalary:
+            [.partTimeSalary]
+        case .duty:
+            [.nightDuty, .dayNightDuty]
+        case .spot:
+            [.spot]
+        case .bonus:
+            [.bonus]
+        case .other:
+            [.other]
         }
     }
 }
