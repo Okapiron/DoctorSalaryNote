@@ -1,0 +1,58 @@
+name: サポート問い合わせ
+description: 医師給与ノートの不具合報告やサポート問い合わせ
+title: "[Support]: "
+labels:
+  - support
+body:
+  - type: markdown
+    attributes:
+      value: |
+        お問い合わせありがとうございます。
+        給与額、勤務先名、源泉徴収票、給与明細画像などの個人情報・機密情報は記載しないでください。
+  - type: input
+    id: app-version
+    attributes:
+      label: アプリのバージョン
+      description: 設定画面のアプリ情報に表示されるバージョンとビルド番号を記載してください。
+      placeholder: 例：1.0 / 1
+  - type: input
+    id: device
+    attributes:
+      label: 端末とiOSバージョン
+      placeholder: 例：iPhone 15 / iOS 17.5
+  - type: dropdown
+    id: category
+    attributes:
+      label: 種別
+      options:
+        - 不具合
+        - 使い方の質問
+        - 改善提案
+        - プライバシーに関する質問
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 内容
+      description: 何が起きたか、または何を確認したいかを記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 不具合の場合、再現手順を可能な範囲で記載してください。
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動作
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
