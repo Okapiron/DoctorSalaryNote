@@ -130,7 +130,8 @@ struct HomeSummaryView: View {
             if payRecords.isEmpty {
                 ContentUnavailableView(
                     "給与明細を登録すると、ここに額面推移が表示されます",
-                    systemImage: "chart.bar"
+                    systemImage: "chart.bar",
+                    description: Text("まずは明細タブで勤務先と給与明細を登録してください。")
                 )
                 .frame(minHeight: 180)
             } else {
@@ -177,7 +178,7 @@ struct HomeSummaryView: View {
                     .font(.headline)
 
                 if selectedRecords.isEmpty {
-                    Text("この期間の明細はまだありません。")
+                    Text("この期間の明細はまだありません。期間を切り替えるか、明細タブから登録してください。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -221,7 +222,7 @@ struct HomeSummaryView: View {
                 .font(.headline)
 
             if recentRecords.isEmpty {
-                Text("給与明細を登録すると、最近の明細がここに表示されます。")
+                Text("給与明細を登録すると、直近5件がここに表示されます。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -268,7 +269,7 @@ struct HomeSummaryView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text("源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
+            Text(documentAttachments.isEmpty ? "書類を登録すると、ここに保存件数が表示されます。" : "源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 

@@ -68,9 +68,9 @@ struct DocumentListView: View {
             Section("勤務先別の書類状況") {
                 if workplaceSummaries.isEmpty {
                     ContentUnavailableView(
-                        "書類状況はまだありません",
+                        "この年の書類状況はまだありません",
                         systemImage: "doc.text",
-                        description: Text("給与明細または書類を登録すると、勤務先別に表示されます。")
+                        description: Text("給与明細がある勤務先は、源泉徴収票の未登録もここで確認できます。")
                     )
                 } else {
                     ForEach(workplaceSummaries) { summary in
@@ -94,7 +94,7 @@ struct DocumentListView: View {
 
             Section("登録済み書類") {
                 if yearDocuments.isEmpty {
-                    Text("この年の書類はまだ登録されていません。")
+                    Text("この年の書類はまだ登録されていません。右上の追加ボタンからPDFや画像を登録できます。")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(yearDocuments) { document in

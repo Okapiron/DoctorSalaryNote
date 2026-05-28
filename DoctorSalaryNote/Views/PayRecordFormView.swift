@@ -30,6 +30,7 @@ struct PayRecordFormView: View {
     @State private var otherDeductionAmountText: String
     @State private var memo: String
     @State private var validationMessage: String?
+    @State private var isAddingEmployer = false
 
     init(payRecord: PayRecord? = nil) {
         self.payRecord = payRecord
@@ -72,9 +73,15 @@ struct PayRecordFormView: View {
         Form {
             Section("支給情報") {
                 if selectableEmployers.isEmpty {
-                    Text("先に勤務先を登録してください。明細画面左上の「勤務先」から追加できます。")
+                    Text("給与明細を登録するには、先に勤務先が必要です。常勤先、外勤先、当直先などを登録してください。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    Button {
+                        isAddingEmployer = true
+                    } label: {
+                        Label("勤務先を追加", systemImage: "building.2")
+                    }
                 }
 
                 Picker("勤務先（必須）", selection: $selectedEmployerID) {
@@ -109,7 +116,7 @@ struct PayRecordFormView: View {
                 }
             }
 
-            Section("金額") {
+            Section {
                 currencyField("額面（必須）", text: $grossAmountText)
                 currencyField("手取り（必須）", text: $netAmountText)
                 currencyField("控除合計", text: $deductionAmountText)
@@ -117,6 +124,10 @@ struct PayRecordFormView: View {
                 currencyField("住民税", text: $residentTaxAmountText)
                 currencyField("社会保険料", text: $socialInsuranceAmountText)
                 currencyField("その他控除", text: $otherDeductionAmountText)
+            } header: {
+                Text("金額")
+            } footer: {
+                Text("金額は円単位の整数で保存します。カンマや「円」を含めても入力できます。")
             }
 
             Section("メモ") {
@@ -170,6 +181,11 @@ struct PayRecordFormView: View {
 
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存", action: save)
+            }
+        }
+        .sheet(isPresented: $isAddingEmployer) {
+            NavigationStack {
+                EmployerFormView()
             }
         }
     }

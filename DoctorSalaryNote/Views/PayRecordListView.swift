@@ -18,7 +18,7 @@ struct PayRecordListView: View {
                     ContentUnavailableView(
                         "明細がありません",
                         systemImage: "list.bullet.rectangle",
-                        description: Text("右上の追加ボタンから登録できます。")
+                        description: Text("左上の「勤務先」で勤務先を登録し、右上の追加ボタンから給与明細を追加できます。")
                     )
                 } else {
                     ForEach(payRecords) { record in

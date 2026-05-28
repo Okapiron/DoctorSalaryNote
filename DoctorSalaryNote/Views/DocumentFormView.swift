@@ -95,6 +95,12 @@ struct DocumentFormView: View {
                 }
 
                 if documentType.requiresPayRecord {
+                    if payRecordCandidates.isEmpty {
+                        Text("給与明細・賞与明細の書類を添付するには、先に明細タブで対象の明細を登録してください。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Picker("紐づける明細（必須）", selection: $selectedPayRecordID) {
                         Text("選択してください").tag(Optional<PersistentIdentifier>.none)
                         ForEach(payRecordCandidates) { record in
@@ -224,7 +230,7 @@ struct DocumentFormView: View {
 
         if documentType.requiresPayRecord {
             guard let selectedPayRecord else {
-                validationMessage = "給与明細・賞与明細は、紐づける明細を選択してください。"
+                validationMessage = "給与明細・賞与明細は、紐づける明細を選択してください。未登録の場合は先に明細を追加してください。"
                 return
             }
             resolvedPayRecord = selectedPayRecord

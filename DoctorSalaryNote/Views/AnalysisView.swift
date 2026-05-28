@@ -194,7 +194,7 @@ struct AnalysisView: View {
         ContentUnavailableView(
             "分析できる明細がありません",
             systemImage: "chart.bar.xaxis",
-            description: Text("給与明細を登録すると、収入推移と内訳を確認できます。")
+            description: Text("給与明細を登録すると、年次推移、月別推移、勤務先別・収入区分別の内訳を確認できます。")
         )
         .frame(minHeight: 260)
     }
@@ -252,7 +252,7 @@ struct AnalysisView: View {
                 )
 
                 if selectedRecords.isEmpty {
-                    Text("この期間の明細はまだありません。")
+                    Text("この期間の明細はまだありません。期間を切り替えるか、明細を追加してください。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)

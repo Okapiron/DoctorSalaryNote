@@ -31,7 +31,7 @@ struct EmployerListView: View {
                 ContentUnavailableView(
                     "勤務先がありません",
                     systemImage: "building.2",
-                    description: Text("右上の追加ボタンから登録できます。")
+                    description: Text("常勤先、外勤先、当直先など、収入が発生する勤務先を右上の追加ボタンから登録できます。")
                 )
             } else {
                 ForEach(displayedEmployers) { employer in
