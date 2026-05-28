@@ -85,6 +85,15 @@ struct HomeSummaryView: View {
             .padding()
         }
         .navigationTitle("ホーム")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Label("設定", systemImage: "gearshape")
+                }
+            }
+        }
     }
 
     private var periodSelector: some View {

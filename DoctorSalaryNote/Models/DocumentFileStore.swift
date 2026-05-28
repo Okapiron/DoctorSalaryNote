@@ -69,6 +69,15 @@ enum DocumentFileStore {
         try? FileManager.default.removeItem(at: fileURL)
     }
 
+    static func deleteAllFiles() {
+        guard let directory = try? attachmentsDirectory(),
+              FileManager.default.fileExists(atPath: directory.path) else {
+            return
+        }
+
+        try? FileManager.default.removeItem(at: directory)
+    }
+
     static func fileURL(forLocalFilePath localFilePath: String) -> URL? {
         guard !localFilePath.isEmpty else {
             return nil

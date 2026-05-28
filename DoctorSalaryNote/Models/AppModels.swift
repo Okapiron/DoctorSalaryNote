@@ -292,4 +292,9 @@ final class AppSettings {
         get { ViewMode(rawValue: defaultViewModeRaw) ?? .calendarYear }
         set { defaultViewModeRaw = newValue.rawValue }
     }
+
+    var isBiometricLockEnabled: Bool {
+        get { biometricLockEnabled }
+        set { biometricLockEnabled = newValue }
+    }
 }
