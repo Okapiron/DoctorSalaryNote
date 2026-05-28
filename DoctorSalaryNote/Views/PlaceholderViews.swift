@@ -1,16 +1,5 @@
 import SwiftUI
 
-struct HomePlaceholderView: View {
-    var body: some View {
-        ContentUnavailableView(
-            "ホーム",
-            systemImage: "house",
-            description: Text("集計表示は次の開発フェーズで追加します。")
-        )
-        .navigationTitle("ホーム")
-    }
-}
-
 struct DocumentsPlaceholderView: View {
     var body: some View {
         ContentUnavailableView(

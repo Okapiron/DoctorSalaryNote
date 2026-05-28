@@ -15,6 +15,7 @@
 		100000000000000000000006 /* EmployerFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* EmployerFormView.swift */; };
 		100000000000000000000007 /* PayRecordListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* PayRecordListView.swift */; };
 		100000000000000000000008 /* PayRecordFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* PayRecordFormView.swift */; };
+		100000000000000000000009 /* HomeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* HomeSummaryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		200000000000000000000007 /* PayRecordListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayRecordListView.swift; sourceTree = "<group>"; };
 		200000000000000000000008 /* PayRecordFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayRecordFormView.swift; sourceTree = "<group>"; };
 		200000000000000000000009 /* DoctorSalaryNote.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DoctorSalaryNote.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000010 /* HomeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSummaryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000003 /* ContentView.swift */,
+				200000000000000000000010 /* HomeSummaryView.swift */,
 				200000000000000000000004 /* PlaceholderViews.swift */,
 				200000000000000000000005 /* EmployerListView.swift */,
 				200000000000000000000006 /* EmployerFormView.swift */,
@@ -159,6 +162,7 @@
 				100000000000000000000001 /* DoctorSalaryNoteApp.swift in Sources */,
 				100000000000000000000002 /* AppModels.swift in Sources */,
 				100000000000000000000003 /* ContentView.swift in Sources */,
+				100000000000000000000009 /* HomeSummaryView.swift in Sources */,
 				100000000000000000000004 /* PlaceholderViews.swift in Sources */,
 				100000000000000000000005 /* EmployerListView.swift in Sources */,
 				100000000000000000000006 /* EmployerFormView.swift in Sources */,
