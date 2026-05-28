@@ -104,14 +104,19 @@ struct HomeSummaryView: View {
         case .calendarYear:
             "1月〜12月"
         case .fiscalYear:
-            "\(fiscalYearStartMonth)月〜翌\(fiscalYearStartMonth == 1 ? 12 : fiscalYearStartMonth - 1)月"
+            fiscalYearStartMonth == 1 ? "1月〜12月" : "\(fiscalYearStartMonth)月〜翌\(fiscalYearStartMonth - 1)月"
         }
     }
 
     private var grossTrendSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("額面推移")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("額面推移")
+                    .font(.headline)
+                Text("直近5期間の額面合計")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if payRecords.isEmpty {
                 ContentUnavailableView(
@@ -158,8 +163,16 @@ struct HomeSummaryView: View {
 
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("\(selectedPeriodTitle)のサマリー")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(selectedPeriodTitle)のサマリー")
+                    .font(.headline)
+
+                if selectedRecords.isEmpty {
+                    Text("この期間の明細はまだありません。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 summaryItem(title: "額面合計", value: yenText(summary.grossTotal))
@@ -210,7 +223,12 @@ struct HomeSummaryView: View {
                         NavigationLink {
                             PayRecordFormView(payRecord: record)
                         } label: {
-                            RecentPayRecordRow(record: record)
+                            HStack(spacing: 12) {
+                                RecentPayRecordRow(record: record)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                         .buttonStyle(.plain)
 
@@ -362,7 +380,8 @@ private func yenText(_ amount: Int) -> String {
 
 private func shortYenText(_ amount: Int) -> String {
     if amount >= 10_000 {
-        return "\(amount / 10_000)万円"
+        let value = Double(amount) / 10_000
+        return String(format: "%.1f万円", value)
     }
     return yenText(amount)
 }
