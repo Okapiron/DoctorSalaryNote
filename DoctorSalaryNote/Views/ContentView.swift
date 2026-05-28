@@ -23,7 +23,7 @@ struct ContentView: View {
             }
 
             NavigationStack {
-                AnalysisPlaceholderView()
+                AnalysisView()
             }
             .tabItem {
                 Label("分析", systemImage: "chart.bar")

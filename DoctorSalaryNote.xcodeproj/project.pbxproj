@@ -20,6 +20,7 @@
 		100000000000000000000011 /* DocumentListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000012 /* DocumentListView.swift */; };
 		100000000000000000000012 /* DocumentFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000013 /* DocumentFormView.swift */; };
 		100000000000000000000013 /* DocumentPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* DocumentPreviewView.swift */; };
+		100000000000000000000014 /* AnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* AnalysisView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		200000000000000000000012 /* DocumentListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentListView.swift; sourceTree = "<group>"; };
 		200000000000000000000013 /* DocumentFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentFormView.swift; sourceTree = "<group>"; };
 		200000000000000000000014 /* DocumentPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPreviewView.swift; sourceTree = "<group>"; };
+		200000000000000000000015 /* AnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalysisView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,6 +88,7 @@
 				200000000000000000000012 /* DocumentListView.swift */,
 				200000000000000000000013 /* DocumentFormView.swift */,
 				200000000000000000000014 /* DocumentPreviewView.swift */,
+				200000000000000000000015 /* AnalysisView.swift */,
 				200000000000000000000005 /* EmployerListView.swift */,
 				200000000000000000000006 /* EmployerFormView.swift */,
 				200000000000000000000007 /* PayRecordListView.swift */,
@@ -180,6 +183,7 @@
 				100000000000000000000011 /* DocumentListView.swift in Sources */,
 				100000000000000000000012 /* DocumentFormView.swift in Sources */,
 				100000000000000000000013 /* DocumentPreviewView.swift in Sources */,
+				100000000000000000000014 /* AnalysisView.swift in Sources */,
 				100000000000000000000005 /* EmployerListView.swift in Sources */,
 				100000000000000000000006 /* EmployerFormView.swift in Sources */,
 				100000000000000000000007 /* PayRecordListView.swift in Sources */,
