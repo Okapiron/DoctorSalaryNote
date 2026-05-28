@@ -25,6 +25,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            storedBiometricLockEnabled = isBiometricLockEnabled
             if isBiometricLockEnabled {
                 authenticate()
             }
@@ -35,13 +36,16 @@ struct ContentView: View {
             }
 
             if newPhase == .active {
-                authenticate()
-            } else if newPhase == .background {
+                if !isUnlocked {
+                    authenticate()
+                }
+            } else if newPhase == .inactive || newPhase == .background {
                 isUnlocked = false
                 authenticationMessage = nil
             }
         }
         .onChange(of: isBiometricLockEnabled) { _, isEnabled in
+            storedBiometricLockEnabled = isEnabled
             if isEnabled {
                 isUnlocked = false
                 authenticate()
@@ -135,7 +139,7 @@ private struct LockedContentView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 }
 

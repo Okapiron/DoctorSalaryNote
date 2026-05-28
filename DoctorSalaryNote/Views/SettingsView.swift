@@ -282,6 +282,7 @@ struct SettingsView: View {
 
         do {
             try modelContext.save()
+            selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil
             securityMessage = nil
