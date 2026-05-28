@@ -35,6 +35,8 @@ struct DocumentFormView: View {
     @State private var validationMessage: String?
     @State private var isPickingPDF = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var pendingOldFileURLToDelete: URL?
+    @State private var pendingNewFileURL: URL?
 
     init(document: DocumentAttachment? = nil, linkedPayRecord: PayRecord? = nil, initialYear: Int = Calendar.current.component(.year, from: Date())) {
         self.document = document
@@ -168,7 +170,7 @@ struct DocumentFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") {
-                    dismiss()
+                    cancel()
                 }
             }
 
@@ -194,7 +196,7 @@ struct DocumentFormView: View {
 
     private var previewFileURL: URL? {
         if let localFilePath {
-            return URL(fileURLWithPath: localFilePath)
+            return DocumentFileStore.fileURL(forLocalFilePath: localFilePath)
         }
 
         guard let document else {
@@ -271,8 +273,13 @@ struct DocumentFormView: View {
             modelContext.insert(newDocument)
         }
 
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            DocumentFileStore.deleteFile(at: pendingOldFileURLToDelete)
+            dismiss()
+        } catch {
+            validationMessage = "書類の保存に失敗しました。もう一度お試しください。"
+        }
     }
 
     private func handlePDFImport(_ result: Result<[URL], Error>) {
@@ -314,13 +321,31 @@ struct DocumentFormView: View {
     }
 
     private func replaceFile(with storedFile: StoredDocumentFile) {
+        let newFileURL = DocumentFileStore.fileURL(forLocalFilePath: storedFile.localFilePath)
+
+        if let pendingNewFileURL, pendingNewFileURL != newFileURL {
+            DocumentFileStore.deleteFile(at: pendingNewFileURL)
+        } else if let previousFileURL = previewFileURL, previousFileURL != newFileURL {
+            if document == nil {
+                DocumentFileStore.deleteFile(at: previousFileURL)
+            } else {
+                pendingOldFileURLToDelete = previousFileURL
+            }
+        }
+
         localFilePath = storedFile.localFilePath
         storedFileName = storedFile.storedFileName
         originalFileName = storedFile.originalFileName
         mimeType = storedFile.mimeType
         fileSize = storedFile.fileSize
         attachmentFileType = storedFile.fileType
+        pendingNewFileURL = newFileURL
         validationMessage = nil
+    }
+
+    private func cancel() {
+        DocumentFileStore.deleteFile(at: pendingNewFileURL)
+        dismiss()
     }
 
     private func payRecordLabel(_ record: PayRecord) -> String {

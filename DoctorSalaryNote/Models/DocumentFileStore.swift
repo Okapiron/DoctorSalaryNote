@@ -35,7 +35,7 @@ enum DocumentFileStore {
         try data.write(to: destinationURL, options: [.atomic])
 
         return StoredDocumentFile(
-            localFilePath: destinationURL.path,
+            localFilePath: relativeLocalFilePath(for: storedFileName),
             storedFileName: storedFileName,
             originalFileName: originalFileName,
             mimeType: mimeType(for: fileExtension, fileType: fileType),
@@ -45,8 +45,9 @@ enum DocumentFileStore {
     }
 
     static func fileURL(for attachment: DocumentAttachment) -> URL? {
-        if let localFilePath = attachment.localFilePath, !localFilePath.isEmpty {
-            return URL(fileURLWithPath: localFilePath)
+        if let localFilePath = attachment.localFilePath,
+           let fileURL = fileURL(forLocalFilePath: localFilePath) {
+            return fileURL
         }
 
         guard let storedFileName = attachment.storedFileName else {
@@ -57,20 +58,44 @@ enum DocumentFileStore {
     }
 
     static func deleteFile(for attachment: DocumentAttachment) {
-        guard let fileURL = fileURL(for: attachment) else {
+        deleteFile(at: fileURL(for: attachment))
+    }
+
+    static func deleteFile(at fileURL: URL?) {
+        guard let fileURL else {
             return
         }
 
         try? FileManager.default.removeItem(at: fileURL)
     }
 
-    private static func attachmentsDirectory() throws -> URL {
-        let documentsURL = try FileManager.default.url(
+    static func fileURL(forLocalFilePath localFilePath: String) -> URL? {
+        guard !localFilePath.isEmpty else {
+            return nil
+        }
+
+        if localFilePath.hasPrefix("/") {
+            return URL(fileURLWithPath: localFilePath)
+        }
+
+        return try? documentsDirectory().appendingPathComponent(localFilePath)
+    }
+
+    private static func relativeLocalFilePath(for storedFileName: String) -> String {
+        "\(directoryName)/\(storedFileName)"
+    }
+
+    private static func documentsDirectory() throws -> URL {
+        try FileManager.default.url(
             for: .documentDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
+    }
+
+    private static func attachmentsDirectory() throws -> URL {
+        let documentsURL = try documentsDirectory()
         let directory = documentsURL.appendingPathComponent(directoryName, isDirectory: true)
 
         if !FileManager.default.fileExists(atPath: directory.path) {
