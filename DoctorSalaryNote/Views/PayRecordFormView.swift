@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 import SwiftUI
 
@@ -55,7 +56,13 @@ struct PayRecordFormView: View {
     var body: some View {
         Form {
             Section("支給情報") {
-                Picker("勤務先", selection: $selectedEmployerID) {
+                if selectableEmployers.isEmpty {
+                    Text("先に勤務先を登録してください。明細画面左上の「勤務先」から追加できます。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("勤務先（必須）", selection: $selectedEmployerID) {
                     Text("選択してください").tag(Optional<PersistentIdentifier>.none)
                     ForEach(selectableEmployers) { employer in
                         Text(employer.name).tag(Optional(employer.persistentModelID))
@@ -70,7 +77,7 @@ struct PayRecordFormView: View {
                     incomeCategory = defaultCategory
                 }
 
-                Picker("収入区分", selection: $incomeCategory) {
+                Picker("収入区分（必須）", selection: $incomeCategory) {
                     ForEach(IncomeCategory.allCases) { category in
                         Text(category.label).tag(category)
                     }
@@ -88,8 +95,8 @@ struct PayRecordFormView: View {
             }
 
             Section("金額") {
-                currencyField("額面", text: $grossAmountText)
-                currencyField("手取り", text: $netAmountText)
+                currencyField("額面（必須）", text: $grossAmountText)
+                currencyField("手取り（必須）", text: $netAmountText)
                 currencyField("控除合計", text: $deductionAmountText)
                 currencyField("所得税", text: $incomeTaxAmountText)
                 currencyField("住民税", text: $residentTaxAmountText)
@@ -190,22 +197,32 @@ struct PayRecordFormView: View {
     }
 
     private func requiredAmount(from text: String) -> Int? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let value = Int(trimmed), value >= 0 else {
+        let normalizedText = normalizedAmountText(from: text)
+        guard !normalizedText.isEmpty, let value = Int(normalizedText), value >= 0 else {
             return nil
         }
         return value
     }
 
     private func optionalAmount(from text: String) -> Int?? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        let normalizedText = normalizedAmountText(from: text)
+        guard !normalizedText.isEmpty else {
             return .some(nil)
         }
-        guard let value = Int(trimmed), value >= 0 else {
+        guard let value = Int(normalizedText), value >= 0 else {
             return nil
         }
         return .some(value)
+    }
+
+    private func normalizedAmountText(from text: String) -> String {
+        let halfWidthText = text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text
+        return halfWidthText
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "¥", with: "")
+            .replacingOccurrences(of: "￥", with: "")
+            .replacingOccurrences(of: "円", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

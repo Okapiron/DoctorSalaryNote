@@ -11,6 +11,20 @@ struct EmployerListView: View {
     @State private var isAddingEmployer = false
     @State private var blockedEmployerName: String?
 
+    private var displayedEmployers: [Employer] {
+        employers.sorted { lhs, rhs in
+            if lhs.isArchived != rhs.isArchived {
+                return !lhs.isArchived
+            }
+
+            if lhs.sortOrder != rhs.sortOrder {
+                return lhs.sortOrder < rhs.sortOrder
+            }
+
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     var body: some View {
         List {
             if employers.isEmpty {
@@ -20,7 +34,7 @@ struct EmployerListView: View {
                     description: Text("右上の追加ボタンから登録できます。")
                 )
             } else {
-                ForEach(employers) { employer in
+                ForEach(displayedEmployers) { employer in
                     NavigationLink {
                         EmployerFormView(employer: employer)
                     } label: {
@@ -71,17 +85,18 @@ struct EmployerListView: View {
                 blockedEmployerName = nil
             }
         } message: {
-            Text("\(blockedEmployerName ?? "この勤務先")には給与明細が登録されています。先に関連する明細を削除してください。")
+            Text("\(blockedEmployerName ?? "この勤務先")には給与明細が登録されています。削除せず、勤務先編集で「無効にする」を使ってください。")
         }
     }
 
     private func deleteEmployers(at offsets: IndexSet) {
-        for index in offsets {
-            let employer = employers[index]
-            guard employer.payRecords.isEmpty else {
-                blockedEmployerName = employer.name
-                return
-            }
+        let targets = offsets.map { displayedEmployers[$0] }
+        if let blockedEmployer = targets.first(where: { !$0.payRecords.isEmpty }) {
+            blockedEmployerName = blockedEmployer.name
+            return
+        }
+
+        for employer in targets {
             modelContext.delete(employer)
         }
 
