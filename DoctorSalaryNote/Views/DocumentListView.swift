@@ -105,38 +105,33 @@ struct DocumentListView: View {
                         Button {
                             selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
                         } label: {
-                            VStack(alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text(summary.employerName)
                                         .font(.headline)
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)
                                     Spacer()
+                                    if selectedSummaryID == summary.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.cyan)
+                                            .accessibilityLabel("絞り込み中")
+                                    }
                                     Text("\(summary.totalDocumentCount)件")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.secondary)
                                 }
 
-                                HStack(spacing: 10) {
-                                    documentStatusPill("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
-                                    documentStatusPill("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.color)
+                                HStack(spacing: 18) {
+                                    documentStatusText("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
+                                    documentStatusText("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.color)
                                 }
                             }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedSummaryID == summary.id ? Color.cyan.opacity(0.12) : Color(.secondarySystemGroupedBackground))
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(selectedSummaryID == summary.id ? Color.cyan.opacity(0.45) : Color.black.opacity(0.04), lineWidth: 1)
-                            }
+                            .padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
-                        .listRowBackground(Color.clear)
 
                         if summary.withholdingStatus == .missing, let employer = summary.employer {
                             VStack(alignment: .leading) {
@@ -154,8 +149,6 @@ struct DocumentListView: View {
                                 .tint(.teal)
                             }
                             .padding(.top, -6)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 30, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear)
                         }
                     }
                 }
@@ -214,8 +207,8 @@ struct DocumentListView: View {
         }
     }
 
-    private func documentStatusPill(_ title: String, _ value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func documentStatusText(_ title: String, _ value: String, color: Color) -> some View {
+        HStack(spacing: 4) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -223,11 +216,7 @@ struct DocumentListView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(color)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(Color(.systemBackground).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .lineLimit(1)
     }
 
     private func makeSummary(for employer: Employer?) -> DocumentWorkplaceSummary {
