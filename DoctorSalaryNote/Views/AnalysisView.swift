@@ -150,7 +150,6 @@ struct AnalysisView: View {
 
     private var annualTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TrendInfographicHeader(points: annualTrendPoints)
             trendInfographicChart(points: annualTrendPoints)
 
             VStack(spacing: 0) {
@@ -174,7 +173,6 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                TrendInfographicHeader(points: monthlyTrendPoints)
                 trendInfographicChart(points: monthlyTrendPoints)
 
                 VStack(spacing: 0) {
@@ -247,8 +245,6 @@ struct AnalysisView: View {
                     }
                 }
 
-                ScaleGuideRow(total: selectedYearGrossTotal)
-
                 HStack(spacing: 12) {
                     LegendDot(color: .cyan, text: "額面")
                     LegendDot(color: .blue, text: "手取り")
@@ -297,16 +293,16 @@ struct AnalysisView: View {
                 BarMark(
                     x: .value("期間", point.label),
                     y: .value("額面", point.grossTotal),
-                    width: .ratio(0.62)
+                    width: .ratio(0.58)
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color.cyan.opacity(0.58), Color.cyan.opacity(0.92)],
+                        colors: [Color.cyan.opacity(0.62), Color.cyan.opacity(0.95)],
                         startPoint: .bottom,
                         endPoint: .top
                     )
                 )
-                .cornerRadius(5)
+                .cornerRadius(4)
             }
 
             ForEach(points) { point in
@@ -316,14 +312,14 @@ struct AnalysisView: View {
                 )
                 .foregroundStyle(.blue)
                 .interpolationMethod(.catmullRom)
-                .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .lineStyle(.init(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
 
                 PointMark(
                     x: .value("期間", point.label),
                     y: .value("手取り", point.netTotal)
                 )
                 .foregroundStyle(.blue)
-                .symbolSize(52)
+                .symbolSize(42)
             }
         }
         .chartYScale(domain: 0...axisMax)
@@ -353,10 +349,14 @@ struct AnalysisView: View {
         }
         .chartPlotStyle { plotArea in
             plotArea
-                .background(Color.cyan.opacity(0.045))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(.systemGray5), lineWidth: 1)
+                }
         }
-        .frame(height: 178)
+        .frame(height: 190)
     }
 }
 
@@ -365,62 +365,6 @@ private struct TrendPoint: Identifiable {
     let label: String
     let grossTotal: Int
     let netTotal: Int
-}
-
-private struct TrendInfographicHeader: View {
-    let points: [TrendPoint]
-
-    private var latest: TrendPoint? {
-        points.last { $0.grossTotal > 0 || $0.netTotal > 0 }
-    }
-
-    private var peak: TrendPoint? {
-        points.max { $0.grossTotal < $1.grossTotal }
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            TrendMetricPill(
-                title: "直近額面",
-                value: latest.map { shortYenText($0.grossTotal) } ?? "0円",
-                color: .cyan
-            )
-            TrendMetricPill(
-                title: "直近手取り",
-                value: latest.map { shortYenText($0.netTotal) } ?? "0円",
-                color: .blue
-            )
-            TrendMetricPill(
-                title: "最大額面",
-                value: peak.map { shortYenText($0.grossTotal) } ?? "0円",
-                color: .teal
-            )
-        }
-    }
-}
-
-private struct TrendMetricPill: View {
-    let title: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(color.opacity(0.09))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
 }
 
 private enum AnalysisTrendScope: String, CaseIterable, Identifiable {
@@ -622,12 +566,6 @@ private struct InfographicBreakdownRow: View {
         return min(Double(summary.netTotal) / Double(yearlyGrossTotal), 1)
     }
 
-    private var shareText: String {
-        guard yearlyGrossTotal > 0 else { return "0%" }
-        let share = Double(summary.grossTotal) / Double(yearlyGrossTotal) * 100
-        return String(format: "%.1f%%", share)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -642,15 +580,10 @@ private struct InfographicBreakdownRow: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(shortYenText(summary.grossTotal))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(shareText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .monospacedDigit()
+                Text(shortYenText(summary.grossTotal))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
             }
 
             GeometryReader { proxy in
@@ -694,37 +627,6 @@ private struct InfographicBreakdownRow: View {
             .monospacedDigit()
         }
         .padding(.vertical, 4)
-    }
-}
-
-private struct ScaleGuideRow: View {
-    let total: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                scaleText("0%")
-                Spacer()
-                scaleText("50%")
-                Spacer()
-                scaleText("100%")
-            }
-
-            HStack {
-                Text("右端 = \(shortYenText(total))")
-                Spacer()
-                Text("選択年の給与総額")
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-        .monospacedDigit()
-    }
-
-    private func scaleText(_ text: String) -> some View {
-        Text(text)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
     }
 }
 

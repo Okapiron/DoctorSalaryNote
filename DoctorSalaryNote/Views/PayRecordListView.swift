@@ -178,23 +178,6 @@ private struct PayRecordEmployerSummary: Identifiable {
     var grossTotal: Int {
         records.reduce(0) { $0 + $1.grossAmount }
     }
-
-    var netTotal: Int {
-        records.reduce(0) { $0 + $1.netAmount }
-    }
-
-    var latestRecord: PayRecord? {
-        records.sorted { lhs, rhs in
-            if lhs.paymentYear == rhs.paymentYear {
-                if lhs.paymentMonth == rhs.paymentMonth {
-                    return lhs.createdAt > rhs.createdAt
-                }
-                return lhs.paymentMonth > rhs.paymentMonth
-            }
-            return lhs.paymentYear > rhs.paymentYear
-        }
-        .first
-    }
 }
 
 private struct PayRecordEmployerSummaryRow: View {
@@ -221,11 +204,6 @@ private struct PayRecordEmployerSummaryRow: View {
                             .accessibilityLabel("絞り込み中")
                     }
                 }
-
-                Text(summary.latestRecord.map { "直近 \($0.monthLabel)・\($0.incomeCategory.label)" } ?? "給与明細なし")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
 
             Spacer()
@@ -267,7 +245,7 @@ private struct PayRecordRow: View {
                     }
                 }
 
-                Text("給与明細・\(record.monthLabel)・\(record.incomeCategory.label)")
+                Text("給与明細・\(record.monthLabel)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
