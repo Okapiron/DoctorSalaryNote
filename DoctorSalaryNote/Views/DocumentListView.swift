@@ -23,6 +23,7 @@ struct DocumentListView: View {
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingDocument = false
     @State private var documentDraft: DocumentDraft?
+    @State private var selectedSummaryID: Int?
 
     private var yearPayRecords: [PayRecord] {
         payRecords.filter { $0.paymentYear == selectedYear }
@@ -30,6 +31,24 @@ struct DocumentListView: View {
 
     private var yearDocuments: [DocumentAttachment] {
         documents.filter { $0.documentYear == selectedYear }
+    }
+
+    private var filteredYearDocuments: [DocumentAttachment] {
+        guard let selectedSummaryID else {
+            return yearDocuments
+        }
+
+        return yearDocuments.filter { document in
+            summaryID(for: document.employer) == selectedSummaryID
+        }
+    }
+
+    private var selectedSummary: DocumentWorkplaceSummary? {
+        guard let selectedSummaryID else {
+            return nil
+        }
+
+        return workplaceSummaries.first { $0.id == selectedSummaryID }
     }
 
     private var workplaceSummaries: [DocumentWorkplaceSummary] {
@@ -43,7 +62,15 @@ struct DocumentListView: View {
             }
             return makeSummary(for: employer)
         }
-        .sorted { $0.employerName.localizedStandardCompare($1.employerName) == .orderedAscending }
+        .sorted { lhs, rhs in
+            if lhs.totalDocumentCount == rhs.totalDocumentCount {
+                if lhs.payRecordCount == rhs.payRecordCount {
+                    return lhs.employerName.localizedStandardCompare(rhs.employerName) == .orderedAscending
+                }
+                return lhs.payRecordCount > rhs.payRecordCount
+            }
+            return lhs.totalDocumentCount > rhs.totalDocumentCount
+        }
 
         if yearDocuments.contains(where: { $0.employer == nil }) {
             summaries.append(makeSummary(for: nil))
@@ -75,20 +102,37 @@ struct DocumentListView: View {
                     )
                 } else {
                     ForEach(workplaceSummaries) { summary in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(summary.employerName)
-                                .font(.headline)
+                        Button {
+                            selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(summary.employerName)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text("\(summary.totalDocumentCount)件")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
 
-                            Label("給与・賞与明細: \(summary.payslipDocumentCount)件 / 登録明細 \(summary.payRecordCount)件", systemImage: "doc.plaintext")
-                                .font(.subheadline)
+                                Label("給与・賞与明細 \(summary.payslipDocumentCount)件 / 登録明細 \(summary.payRecordCount)件", systemImage: "doc.plaintext")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
 
-                            HStack {
-                                statusText("源泉徴収票", summary.withholdingStatus)
-                                Spacer()
-                                statusText("支払調書", summary.paymentStatementStatus)
+                                HStack {
+                                    statusText("源泉徴収票", summary.withholdingStatus)
+                                    Spacer()
+                                    statusText("支払調書", summary.paymentStatementStatus)
+                                }
                             }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(selectedSummaryID == summary.id ? Color.cyan.opacity(0.08) : Color.clear)
 
-                            if summary.withholdingStatus == .missing, let employer = summary.employer {
+                        if summary.withholdingStatus == .missing, let employer = summary.employer {
+                            VStack(alignment: .leading) {
                                 Button {
                                     documentDraft = DocumentDraft(
                                         documentType: .withholdingSlip,
@@ -102,18 +146,18 @@ struct DocumentListView: View {
                                 .buttonStyle(.borderless)
                                 .tint(.teal)
                             }
+                            .padding(.top, -4)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
             }
 
-            Section("登録済み書類") {
-                if yearDocuments.isEmpty {
+            Section {
+                if filteredYearDocuments.isEmpty {
                     Text("この年の書類はまだ登録されていません。右上の追加ボタンからPDFや画像を登録できます。")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(yearDocuments) { document in
+                    ForEach(filteredYearDocuments) { document in
                         NavigationLink {
                             DocumentFormView(document: document)
                         } label: {
@@ -121,6 +165,17 @@ struct DocumentListView: View {
                         }
                     }
                     .onDelete(perform: deleteDocuments)
+                }
+            } header: {
+                HStack {
+                    Text(selectedSummary.map { "\($0.employerName)の書類" } ?? "登録済み書類")
+                    Spacer()
+                    if selectedSummaryID != nil {
+                        Button("すべて表示") {
+                            selectedSummaryID = nil
+                        }
+                        .font(.caption)
+                    }
                 }
             }
         }
@@ -171,19 +226,24 @@ struct DocumentListView: View {
         let hasPaymentStatement = employerDocuments.contains { $0.documentType == .paymentStatement }
 
         return DocumentWorkplaceSummary(
-            id: employer?.persistentModelID.hashValue ?? -1,
+            id: summaryID(for: employer),
             employer: employer,
             employerName: employer?.name ?? "勤務先未設定",
             payRecordCount: records.count,
+            totalDocumentCount: employerDocuments.count,
             payslipDocumentCount: payslipDocumentCount,
             withholdingStatus: hasWithholdingSlip ? .registered : (records.isEmpty ? .none : .missing),
             paymentStatementStatus: hasPaymentStatement ? .registered : .none
         )
     }
 
+    private func summaryID(for employer: Employer?) -> Int {
+        employer?.persistentModelID.hashValue ?? -1
+    }
+
     private func deleteDocuments(at offsets: IndexSet) {
         for index in offsets {
-            let document = yearDocuments[index]
+            let document = filteredYearDocuments[index]
             DocumentFileStore.deleteFile(for: document)
             modelContext.delete(document)
         }
@@ -197,6 +257,7 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let employer: Employer?
     let employerName: String
     let payRecordCount: Int
+    let totalDocumentCount: Int
     let payslipDocumentCount: Int
     let withholdingStatus: DocumentStatus
     let paymentStatementStatus: DocumentStatus
@@ -263,8 +324,8 @@ private struct DocumentRow: View {
     private var subtitle: String {
         let employerName = document.employer?.name ?? "勤務先未設定"
         if let payRecord = document.payRecord {
-            return "\(payRecord.paymentYear)年\(payRecord.paymentMonth)月・\(employerName)"
+            return "\(payRecord.paymentMonth)月・\(employerName)"
         }
-        return "\(document.documentYear)年・\(employerName)"
+        return employerName
     }
 }

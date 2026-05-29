@@ -33,8 +33,17 @@ struct AnalysisView: View {
     private var annualStackItems: [StackedAmountItem] {
         annualSummaries.flatMap { summary in
             [
-                StackedAmountItem(id: "\(summary.period)-net", label: summary.label, kind: .net, amount: summary.netTotal),
-                StackedAmountItem(id: "\(summary.period)-deduction", label: summary.label, kind: .deduction, amount: summary.deductionTotal)
+                StackedAmountItem(id: "\(summary.period)-net", label: summary.label, kind: .net, amount: summary.netTotal, totalAmount: summary.grossTotal),
+                StackedAmountItem(id: "\(summary.period)-deduction", label: summary.label, kind: .deduction, amount: summary.deductionTotal, totalAmount: summary.grossTotal)
+            ]
+        }
+    }
+
+    private var monthlyStackItems: [StackedAmountItem] {
+        monthlySummaries.flatMap { summary in
+            [
+                StackedAmountItem(id: "\(summary.month)-net", label: summary.label, kind: .net, amount: summary.netTotal, totalAmount: summary.grossTotal),
+                StackedAmountItem(id: "\(summary.month)-deduction", label: summary.label, kind: .deduction, amount: summary.deductionTotal, totalAmount: summary.grossTotal)
             ]
         }
     }
@@ -121,7 +130,7 @@ struct AnalysisView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
                     title: "推移",
-                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "直近5年の手取り・控除"
+                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "直近5年の推移"
                 )
 
                 Picker("推移", selection: $trendScope) {
@@ -153,7 +162,7 @@ struct AnalysisView: View {
             }
             .chartForegroundStyleScale([
                 AmountKind.net.label: .blue,
-                AmountKind.deduction.label: .gray.opacity(0.55)
+                AmountKind.deduction.label: .cyan.opacity(0.35)
             ])
             .chartYAxis {
                 AxisMarks { value in
@@ -188,31 +197,18 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                Chart {
-                    ForEach(monthlySummaries) { summary in
-                        BarMark(
-                            x: .value("月", summary.label),
-                            y: .value("額面", summary.grossTotal)
-                        )
-                        .foregroundStyle(.cyan.gradient)
-                        .cornerRadius(4)
-                    }
-
-                    ForEach(monthlySummaries) { summary in
-                        LineMark(
-                            x: .value("月", summary.label),
-                            y: .value("手取り", summary.netTotal)
-                        )
-                        .foregroundStyle(.blue)
-                        .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
-
-                        PointMark(
-                            x: .value("月", summary.label),
-                            y: .value("手取り", summary.netTotal)
-                        )
-                        .foregroundStyle(.blue)
-                    }
+                Chart(monthlyStackItems) { item in
+                    BarMark(
+                        x: .value("月", item.label),
+                        y: .value("金額", item.amount)
+                    )
+                    .foregroundStyle(by: .value("区分", item.kind.label))
+                    .cornerRadius(4)
                 }
+                .chartForegroundStyleScale([
+                    AmountKind.net.label: .blue,
+                    AmountKind.deduction.label: .cyan.opacity(0.35)
+                ])
                 .chartYAxis {
                     AxisMarks { value in
                         AxisGridLine()
@@ -226,9 +222,9 @@ struct AnalysisView: View {
                 .frame(height: 220)
 
                 HStack(spacing: 12) {
-                    LegendDot(color: .cyan, text: "額面")
                     LegendDot(color: .blue, text: "手取り")
-                    Text("控除は下の月別一覧で確認")
+                    LegendDot(color: .cyan.opacity(0.35), text: "控除")
+                    Text("積み上げ合計が額面")
                         .foregroundStyle(.secondary)
                 }
                 .font(.caption)
@@ -260,7 +256,7 @@ struct AnalysisView: View {
     private var employerBreakdownSection: some View {
         analysisCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "勤務先別", subtitle: "勤務先ごとの額面・手取り")
+                sectionHeader(title: "勤務先別", subtitle: "勤務先ごとの手取りと控除")
                 breakdownContent(
                     summaries: employerSummaries,
                     emptyMessage: "この年の勤務先別データはまだありません。"
@@ -282,7 +278,15 @@ struct AnalysisView: View {
     }
 
     private func breakdownContent(summaries: [BreakdownSummary], emptyMessage: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let visibleSummaries = Array(summaries.prefix(8))
+        let stackedItems = visibleSummaries.flatMap { summary in
+            [
+                StackedAmountItem(id: "\(summary.id)-net", label: summary.label, kind: .net, amount: summary.netTotal, totalAmount: summary.grossTotal),
+                StackedAmountItem(id: "\(summary.id)-deduction", label: summary.label, kind: .deduction, amount: summary.deductionTotal, totalAmount: summary.grossTotal)
+            ]
+        }
+
+        return VStack(alignment: .leading, spacing: 12) {
             if summaries.isEmpty {
                 Text(emptyMessage)
                     .font(.subheadline)
@@ -290,19 +294,25 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                Chart(summaries.prefix(8).map { $0 }) { summary in
+                Chart(stackedItems) { item in
                     BarMark(
-                        x: .value("額面", summary.grossTotal),
-                        y: .value("項目", summary.label)
+                        x: .value("金額", item.amount),
+                        y: .value("項目", item.label)
                     )
-                    .foregroundStyle(.cyan.gradient)
+                    .foregroundStyle(by: .value("区分", item.kind.label))
                     .cornerRadius(4)
                     .annotation(position: .trailing) {
-                        Text(shortYenText(summary.grossTotal))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        if item.kind == .deduction {
+                            Text(shortYenText(item.totalAmount))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .chartForegroundStyleScale([
+                    AmountKind.net.label: .blue,
+                    AmountKind.deduction.label: .cyan.opacity(0.35)
+                ])
                 .chartXAxis {
                     AxisMarks { value in
                         AxisGridLine()
@@ -313,7 +323,15 @@ struct AnalysisView: View {
                         }
                     }
                 }
-                .frame(height: max(170, CGFloat(min(summaries.count, 8)) * 34))
+                .frame(height: max(170, CGFloat(visibleSummaries.count) * 38))
+
+                HStack(spacing: 12) {
+                    LegendDot(color: .blue, text: "手取り")
+                    LegendDot(color: .cyan.opacity(0.35), text: "控除")
+                    Text("右端が額面")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
 
                 VStack(spacing: 0) {
                     ForEach(summaries) { summary in
@@ -393,6 +411,7 @@ private struct BreakdownSummary: Identifiable {
     var id: String { label }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
     var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
     var count: Int { records.count }
 }
 
@@ -401,6 +420,7 @@ private struct StackedAmountItem: Identifiable {
     let label: String
     let kind: AmountKind
     let amount: Int
+    let totalAmount: Int
 }
 
 private enum AmountKind {
