@@ -163,7 +163,7 @@ struct PayRecordFormView: View {
             Section("添付書類") {
                 if let payRecord {
                     if linkedDocuments.isEmpty {
-                        Text("この明細に紐づく書類はまだありません。")
+                        Text("この給与明細に紐づく書類はまだありません。")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     } else {
@@ -199,7 +199,7 @@ struct PayRecordFormView: View {
                 }
             }
         }
-        .navigationTitle(payRecord == nil ? "明細追加" : "明細編集")
+        .navigationTitle(payRecord == nil ? "給与明細追加" : "給与明細編集")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") {
@@ -245,7 +245,7 @@ struct PayRecordFormView: View {
 
     private var pendingDocumentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("保存時に、この明細へ給与明細または賞与明細として紐づけます。")
+            Text("保存時に、この給与明細へ給与明細または賞与明細として紐づけます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

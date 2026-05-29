@@ -112,7 +112,7 @@ struct AnalysisView: View {
 
     private var emptyState: some View {
         ContentUnavailableView(
-            "分析できる明細がありません",
+            "分析できる給与明細がありません",
             systemImage: "chart.bar.xaxis",
             description: Text("給与明細を登録すると、月別推移、年次推移、勤務先別・収入区分別の内訳を確認できます。")
         )
@@ -164,7 +164,7 @@ struct AnalysisView: View {
     private var monthlyTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             if selectedRecords.isEmpty {
-                Text("この年の明細はまだありません。年を切り替えるか、明細を追加してください。")
+                Text("この年の給与明細はまだありません。年を切り替えるか、給与明細を追加してください。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

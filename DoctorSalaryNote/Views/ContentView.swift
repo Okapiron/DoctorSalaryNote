@@ -67,7 +67,7 @@ struct ContentView: View {
 
             PayRecordListView()
                 .tabItem {
-                    Label("明細", systemImage: "list.bullet.rectangle")
+                    Label("給与", systemImage: "list.bullet.rectangle")
                 }
 
             NavigationStack {

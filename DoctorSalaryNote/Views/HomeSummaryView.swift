@@ -143,14 +143,14 @@ struct HomeSummaryView: View {
             VStack(alignment: .leading, spacing: 14) {
                 sectionHeader(
                     title: "\(latestMonthSummary.longLabel)の給与",
-                    subtitle: latestMonthSummary.records.isEmpty ? "この月の明細はまだありません" : "\(latestMonthSummary.records.count)件の明細"
+                    subtitle: latestMonthSummary.records.isEmpty ? "この月の給与明細はまだありません" : "\(latestMonthSummary.records.count)件の給与明細"
                 )
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal))
                     summaryItem(title: "手取り", value: yenText(latestMonthSummary.netTotal))
                     summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal))
-                    summaryItem(title: "明細", value: "\(latestMonthSummary.records.count)件")
+                    summaryItem(title: "給与明細", value: "\(latestMonthSummary.records.count)件")
                 }
             }
         }
@@ -210,7 +210,7 @@ struct HomeSummaryView: View {
     private var recentRecordsSection: some View {
         homeCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "最近の明細", subtitle: "登録した給与明細をすぐ確認")
+                sectionHeader(title: "最近の給与明細", subtitle: "登録した給与明細をすぐ確認")
 
                 if recentRecords.isEmpty {
                     Text("給与明細を登録すると、直近5件がここに表示されます。")
@@ -222,7 +222,7 @@ struct HomeSummaryView: View {
                     VStack(spacing: 0) {
                         ForEach(recentRecords) { record in
                             NavigationLink {
-                                PayRecordFormView(payRecord: record)
+                                PayRecordDetailView(payRecord: record)
                             } label: {
                                 HStack(spacing: 12) {
                                     RecentPayRecordRow(record: record)

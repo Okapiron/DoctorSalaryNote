@@ -63,7 +63,7 @@ struct EmployerListView: View {
                         Button {
                             payRecordEmployer = employer
                         } label: {
-                            Label("明細追加", systemImage: "yensign.circle")
+                            Label("給与入力", systemImage: "yensign.circle")
                         }
                         .tint(.teal)
                     }
