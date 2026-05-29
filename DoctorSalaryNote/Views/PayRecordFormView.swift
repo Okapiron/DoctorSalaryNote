@@ -1,6 +1,9 @@
 import Foundation
+import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct PayRecordFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -33,6 +36,16 @@ struct PayRecordFormView: View {
     @State private var validationMessage: String?
     @State private var isShowingValidation = false
     @State private var isAddingEmployer = false
+    @State private var isPickingPDF = false
+    @State private var isShowingCamera = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var pendingDocumentLocalFilePath: String?
+    @State private var pendingDocumentStoredFileName: String?
+    @State private var pendingDocumentOriginalFileName: String?
+    @State private var pendingDocumentMimeType: String?
+    @State private var pendingDocumentFileSize: Int?
+    @State private var pendingDocumentFileType: AttachmentFileType = .other
+    @State private var pendingDocumentFileURL: URL?
 
     init(payRecord: PayRecord? = nil, initialEmployer: Employer? = nil) {
         self.payRecord = payRecord
@@ -147,8 +160,8 @@ struct PayRecordFormView: View {
                     .frame(minHeight: 120)
             }
 
-            if let payRecord {
-                Section("添付書類") {
+            Section("添付書類") {
+                if let payRecord {
                     if linkedDocuments.isEmpty {
                         Text("この明細に紐づく書類はまだありません。")
                             .font(.subheadline)
@@ -181,6 +194,8 @@ struct PayRecordFormView: View {
                     } label: {
                         Label("書類を添付", systemImage: "paperclip")
                     }
+                } else {
+                    pendingDocumentSection
                 }
             }
         }
@@ -188,7 +203,7 @@ struct PayRecordFormView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") {
-                    dismiss()
+                    cancel()
                 }
             }
 
@@ -201,11 +216,88 @@ struct PayRecordFormView: View {
                 EmployerFormView()
             }
         }
+        .fileImporter(
+            isPresented: $isPickingPDF,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false,
+            onCompletion: handlePDFImport
+        )
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else {
+                return
+            }
+            Task {
+                await handlePhotoImport(newItem)
+            }
+        }
+        .sheet(isPresented: $isShowingCamera) {
+            CameraCaptureView { image in
+                handleCapturedImage(image)
+            }
+            .ignoresSafeArea()
+        }
         .alert("保存できません", isPresented: $isShowingValidation) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(validationMessage ?? "入力内容を確認してください。")
         }
+    }
+
+    private var pendingDocumentSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("保存時に、この明細へ給与明細または賞与明細として紐づけます。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Text(pendingDocumentOriginalFileName ?? "未選択")
+                    .foregroundStyle(pendingDocumentOriginalFileName == nil ? .secondary : .primary)
+                    .lineLimit(1)
+                Spacer()
+                if let pendingDocumentFileSize {
+                    Text(byteCountText(pendingDocumentFileSize))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button {
+                isPickingPDF = true
+            } label: {
+                Label("PDFを選択", systemImage: "doc")
+            }
+
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                Label("画像を選択", systemImage: "photo")
+            }
+
+            Button {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    isShowingCamera = true
+                } else {
+                    showValidation("この端末ではカメラを使用できません。画像選択またはPDF選択を使ってください。")
+                }
+            } label: {
+                Label(pendingDocumentFileURL == nil ? "カメラで撮影" : "カメラで撮り直す", systemImage: "camera")
+            }
+
+            if let pendingDocumentFileURL {
+                NavigationLink {
+                    DocumentPreviewView(
+                        title: pendingDocumentType.label,
+                        fileType: pendingDocumentFileType,
+                        fileURL: pendingDocumentFileURL
+                    )
+                } label: {
+                    Label("プレビュー", systemImage: "eye")
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var pendingDocumentType: DocumentType {
+        incomeCategory == .bonus ? .bonusPayslip : .payslip
     }
 
     private func currencyField(_ title: String, text: Binding<String>) -> some View {
@@ -292,6 +384,28 @@ struct PayRecordFormView: View {
                 memo: memo
             )
             modelContext.insert(newRecord)
+
+            if let pendingDocumentLocalFilePath,
+               let pendingDocumentStoredFileName,
+               let pendingDocumentOriginalFileName,
+               let pendingDocumentMimeType,
+               let pendingDocumentFileSize {
+                let document = DocumentAttachment(
+                    employer: selectedEmployer,
+                    payRecord: newRecord,
+                    documentYear: paymentYear,
+                    documentType: pendingDocumentType,
+                    title: "",
+                    attachmentFileType: pendingDocumentFileType,
+                    localFilePath: pendingDocumentLocalFilePath,
+                    originalFileName: pendingDocumentOriginalFileName,
+                    storedFileName: pendingDocumentStoredFileName,
+                    mimeType: pendingDocumentMimeType,
+                    fileSize: pendingDocumentFileSize,
+                    memo: ""
+                )
+                modelContext.insert(document)
+            }
         }
 
         do {
@@ -300,6 +414,86 @@ struct PayRecordFormView: View {
         } catch {
             showValidation("保存に失敗しました。もう一度お試しください。")
         }
+    }
+
+    private func handlePDFImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else {
+                showValidation("PDFファイルを選択できませんでした。")
+                return
+            }
+            do {
+                try replacePendingDocument(with: DocumentFileStore.saveSecurityScopedFile(from: url, fileType: .pdf))
+            } catch {
+                showValidation("PDFの保存に失敗しました。もう一度お試しください。")
+            }
+        case .failure:
+            showValidation("PDFの取込に失敗しました。")
+        }
+    }
+
+    private func handlePhotoImport(_ item: PhotosPickerItem) async {
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                await MainActor.run {
+                    showValidation("画像を読み込めませんでした。")
+                }
+                return
+            }
+
+            let storedFile = try DocumentFileStore.saveData(data, originalFileName: "画像.jpg", fileType: .image)
+            await MainActor.run {
+                replacePendingDocument(with: storedFile)
+                selectedPhotoItem = nil
+            }
+        } catch {
+            await MainActor.run {
+                showValidation("画像の保存に失敗しました。もう一度お試しください。")
+            }
+        }
+    }
+
+    private func handleCapturedImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            showValidation("撮影した画像を保存できませんでした。もう一度お試しください。")
+            return
+        }
+
+        do {
+            let storedFile = try DocumentFileStore.saveData(data, originalFileName: "撮影画像.jpg", fileType: .image)
+            replacePendingDocument(with: storedFile)
+        } catch {
+            showValidation("撮影した画像の保存に失敗しました。もう一度お試しください。")
+        }
+    }
+
+    private func replacePendingDocument(with storedFile: StoredDocumentFile) {
+        let newFileURL = DocumentFileStore.fileURL(forLocalFilePath: storedFile.localFilePath)
+
+        if pendingDocumentFileURL != newFileURL {
+            DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+        }
+
+        pendingDocumentLocalFilePath = storedFile.localFilePath
+        pendingDocumentStoredFileName = storedFile.storedFileName
+        pendingDocumentOriginalFileName = storedFile.originalFileName
+        pendingDocumentMimeType = storedFile.mimeType
+        pendingDocumentFileSize = storedFile.fileSize
+        pendingDocumentFileType = storedFile.fileType
+        pendingDocumentFileURL = newFileURL
+        validationMessage = nil
+    }
+
+    private func cancel() {
+        if payRecord == nil {
+            DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+        }
+        dismiss()
+    }
+
+    private func byteCountText(_ byteCount: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
     }
 
     private func requiredAmount(from text: String) -> Int? {

@@ -413,7 +413,7 @@ struct DocumentFormView: View {
     }
 }
 
-private struct CameraCaptureView: UIViewControllerRepresentable {
+struct CameraCaptureView: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
 
     let onImageCaptured: (UIImage) -> Void

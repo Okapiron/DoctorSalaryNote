@@ -29,18 +29,24 @@ struct PayRecordListView: View {
                         NavigationLink {
                             PayRecordFormView(payRecord: record)
                         } label: {
+                            let hasDocument = hasLinkedDocument(for: record)
                             HStack(alignment: .center, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {
                                         Text(record.employer?.name ?? "勤務先未設定")
                                             .font(.headline)
                                             .lineLimit(1)
+                                            .truncationMode(.tail)
 
-                                        if hasLinkedDocument(for: record) {
+                                        if hasDocument {
                                             Image(systemName: "paperclip")
                                                 .font(.caption.weight(.semibold))
                                                 .foregroundStyle(.cyan)
                                                 .accessibilityLabel("添付書類あり")
+                                                .frame(width: 18)
+                                        } else {
+                                            Color.clear
+                                                .frame(width: 18, height: 1)
                                         }
                                     }
 
@@ -61,6 +67,7 @@ struct PayRecordListView: View {
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.75)
                                 }
+                                .frame(width: 118, alignment: .trailing)
                             }
                             .padding(.vertical, 2)
                         }

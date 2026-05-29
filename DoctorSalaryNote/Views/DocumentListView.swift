@@ -235,27 +235,36 @@ private struct DocumentRow: View {
     let document: DocumentAttachment
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        HStack(spacing: 12) {
+            Image(systemName: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
+                .font(.title3)
+                .foregroundStyle(.cyan)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
                 Text(document.documentType.label)
                     .font(.headline)
-                Spacer()
-                Text("\(document.documentYear)年")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
-            Text(document.employer?.name ?? "勤務先未設定")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            if let originalFileName = document.originalFileName {
-                Label(originalFileName, systemImage: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+
+            Spacer()
+
+            Text(document.attachmentFileType.label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+    }
+
+    private var subtitle: String {
+        let employerName = document.employer?.name ?? "勤務先未設定"
+        if let payRecord = document.payRecord {
+            return "\(payRecord.paymentYear)年\(payRecord.paymentMonth)月・\(employerName)"
+        }
+        return "\(document.documentYear)年・\(employerName)"
     }
 }
