@@ -29,37 +29,40 @@ struct PayRecordListView: View {
                         NavigationLink {
                             PayRecordFormView(payRecord: record)
                         } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(record.employer?.name ?? "勤務先未設定")
-                                        .font(.headline)
-                                    if hasLinkedDocument(for: record) {
-                                        Image(systemName: "paperclip")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.teal)
-                                            .accessibilityLabel("添付書類あり")
+                            HStack(alignment: .center, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 6) {
+                                        Text(record.employer?.name ?? "勤務先未設定")
+                                            .font(.headline)
+                                            .lineLimit(1)
+
+                                        if hasLinkedDocument(for: record) {
+                                            Image(systemName: "paperclip")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(.cyan)
+                                                .accessibilityLabel("添付書類あり")
+                                        }
                                     }
-                                    Spacer()
-                                    Text(record.monthLabel)
-                                        .font(.subheadline)
+
+                                    Text("\(record.monthLabel)・\(record.incomeCategory.label)")
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
 
-                                HStack {
-                                    Text(record.incomeCategory.label)
-                                        .font(.subheadline)
+                                Spacer()
+
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("額面")
+                                        .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text("額面 \(record.grossAmount.yenText)")
-                                            .foregroundStyle(.primary)
-                                        Text("手取り \(record.netAmount.yenText)")
-                                            .foregroundStyle(.teal)
-                                    }
-                                    .font(.subheadline)
+                                    Text(record.grossAmount.yenText)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.75)
                                 }
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, 2)
                         }
                     }
                     .onDelete(perform: deletePayRecords)

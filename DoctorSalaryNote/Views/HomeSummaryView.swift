@@ -103,9 +103,11 @@ struct HomeSummaryView: View {
                                 x: .value("月", summary.shortLabel),
                                 y: .value("額面", summary.grossTotal)
                             )
-                            .foregroundStyle(.teal.gradient)
+                            .foregroundStyle(.cyan.gradient)
                             .cornerRadius(4)
+                        }
 
+                        ForEach(recentMonthSummaries) { summary in
                             LineMark(
                                 x: .value("月", summary.shortLabel),
                                 y: .value("手取り", summary.netTotal)
@@ -145,10 +147,10 @@ struct HomeSummaryView: View {
                 )
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal), color: .teal)
-                    summaryItem(title: "手取り", value: yenText(latestMonthSummary.netTotal), color: .blue)
-                    summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal), color: .orange)
-                    summaryItem(title: "手取り率", value: latestMonthSummary.takeHomeRateText, color: .green)
+                    summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal))
+                    summaryItem(title: "手取り", value: yenText(latestMonthSummary.netTotal))
+                    summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal))
+                    summaryItem(title: "明細", value: "\(latestMonthSummary.records.count)件")
                 }
             }
         }
@@ -189,7 +191,7 @@ struct HomeSummaryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func summaryItem(title: String, value: String, color: Color) -> some View {
+    private func summaryItem(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
@@ -201,7 +203,7 @@ struct HomeSummaryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(color.opacity(0.10))
+        .background(Color.cyan.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -260,20 +262,14 @@ struct HomeSummaryView: View {
         }
     }
 
-    private func homeCard<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
+    private func homeCard<Content: View>(tint _: Color, @ViewBuilder content: () -> Content) -> some View {
         content()
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.background)
-                    .shadow(color: tint.opacity(0.10), radius: 10, y: 4)
+                    .shadow(color: Color.cyan.opacity(0.08), radius: 10, y: 4)
             )
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(tint.gradient)
-                    .frame(width: 4)
-                    .padding(.vertical, 14)
-            }
     }
 
     private func sectionHeader(title: String, subtitle: String) -> some View {
@@ -308,10 +304,6 @@ private struct HomeMonthSummary: Identifiable {
     var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
     var deductionTotal: Int { records.reduce(0) { $0 + ($1.deductionAmount ?? max($1.grossAmount - $1.netAmount, 0)) } }
 
-    var takeHomeRateText: String {
-        guard grossTotal > 0 else { return "-" }
-        return String(format: "%.1f%%", Double(netTotal) / Double(grossTotal) * 100)
-    }
 }
 
 private struct HomeYearSummary {

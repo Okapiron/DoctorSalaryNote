@@ -152,8 +152,8 @@ struct AnalysisView: View {
                 .cornerRadius(4)
             }
             .chartForegroundStyleScale([
-                AmountKind.net.label: .green,
-                AmountKind.deduction.label: .orange
+                AmountKind.net.label: .blue,
+                AmountKind.deduction.label: .gray.opacity(0.55)
             ])
             .chartYAxis {
                 AxisMarks { value in
@@ -194,9 +194,11 @@ struct AnalysisView: View {
                             x: .value("月", summary.label),
                             y: .value("額面", summary.grossTotal)
                         )
-                        .foregroundStyle(.teal.gradient)
+                        .foregroundStyle(.cyan.gradient)
                         .cornerRadius(4)
+                    }
 
+                    ForEach(monthlySummaries) { summary in
                         LineMark(
                             x: .value("月", summary.label),
                             y: .value("手取り", summary.netTotal)
@@ -224,9 +226,10 @@ struct AnalysisView: View {
                 .frame(height: 220)
 
                 HStack(spacing: 12) {
-                    LegendDot(color: .teal, text: "額面")
+                    LegendDot(color: .cyan, text: "額面")
                     LegendDot(color: .blue, text: "手取り")
-                    LegendDot(color: .orange, text: "控除は下の月別一覧で確認")
+                    Text("控除は下の月別一覧で確認")
+                        .foregroundStyle(.secondary)
                 }
                 .font(.caption)
 
@@ -292,7 +295,7 @@ struct AnalysisView: View {
                         x: .value("額面", summary.grossTotal),
                         y: .value("項目", summary.label)
                     )
-                    .foregroundStyle(.teal.gradient)
+                    .foregroundStyle(.cyan.gradient)
                     .cornerRadius(4)
                     .annotation(position: .trailing) {
                         Text(shortYenText(summary.grossTotal))
@@ -325,20 +328,14 @@ struct AnalysisView: View {
         }
     }
 
-    private func analysisCard<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
+    private func analysisCard<Content: View>(tint _: Color, @ViewBuilder content: () -> Content) -> some View {
         content()
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.background)
-                    .shadow(color: tint.opacity(0.10), radius: 10, y: 4)
+                    .shadow(color: Color.cyan.opacity(0.08), radius: 10, y: 4)
             )
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(tint.gradient)
-                    .frame(width: 4)
-                    .padding(.vertical, 14)
-            }
     }
 
     private func sectionHeader(title: String, subtitle: String) -> some View {
@@ -376,10 +373,6 @@ private struct AnalysisPeriodSummary: Identifiable {
     var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
     var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
 
-    var takeHomeRateText: String {
-        guard grossTotal > 0 else { return "-" }
-        return String(format: "%.1f%%", Double(netTotal) / Double(grossTotal) * 100)
-    }
 }
 
 private struct AnalysisMonthSummary: Identifiable {
@@ -462,7 +455,7 @@ private struct PeriodSummaryRow: View {
                 Text(summary.label)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("手取り率 \(summary.takeHomeRateText)")
+                Text("\(summary.records.count)件")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
