@@ -214,7 +214,7 @@ struct AnalysisView: View {
     private var incomeCategoryBreakdownSection: some View {
         analysisCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "収入区分別", subtitle: "常勤、外勤、当直、賞与などの比較")
+                sectionHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較")
                 breakdownContent(
                     summaries: incomeCategorySummaries,
                     emptyMessage: "この年の収入区分別データはまだありません。"
@@ -434,17 +434,15 @@ private struct BreakdownSummary: Identifiable {
 
 private enum IncomeCategoryAnalysisGroup: CaseIterable {
     case fullTimeSalary
-    case partTimeSalary
-    case duty
-    case spot
     case bonus
+    case partTimeSalary
+    case spot
     case other
 
     var label: String {
         switch self {
         case .fullTimeSalary: "常勤給与"
         case .partTimeSalary: "外勤"
-        case .duty: "当直・日当直"
         case .spot: "スポット"
         case .bonus: "賞与"
         case .other: "その他"
@@ -455,7 +453,6 @@ private enum IncomeCategoryAnalysisGroup: CaseIterable {
         switch self {
         case .fullTimeSalary: [.fullTimeSalary]
         case .partTimeSalary: [.partTimeSalary]
-        case .duty: [.nightDuty, .dayNightDuty]
         case .spot: [.spot]
         case .bonus: [.bonus]
         case .other: [.other]

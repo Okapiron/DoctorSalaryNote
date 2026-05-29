@@ -65,12 +65,12 @@
 ### incomeType
 
 - fullTimeSalary
-- partTimeSalary
-- nightDuty
-- dayNightDuty
-- spot
 - bonus
+- partTimeSalary
+- spot
 - other
+
+旧バージョンで保存されたnightDuty、dayNightDutyは互換用に読み取り、アプリ上はpartTimeSalary相当の外勤として扱う。
 
 ### Required Fields
 

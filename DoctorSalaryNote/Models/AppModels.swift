@@ -24,23 +24,35 @@ enum EmployerType: String, CaseIterable, Codable, Identifiable {
 enum IncomeCategory: String, CaseIterable, Codable, Identifiable {
     case fullTimeSalary
     case partTimeSalary
+    // Legacy values kept so existing local data can still be read.
     case nightDuty
     case dayNightDuty
     case spot
     case bonus
     case other
 
+    static var allCases: [IncomeCategory] {
+        [.fullTimeSalary, .bonus, .partTimeSalary, .spot, .other]
+    }
+
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .fullTimeSalary: "常勤給与"
-        case .partTimeSalary: "外勤給与"
-        case .nightDuty: "当直"
-        case .dayNightDuty: "日当直"
+        case .partTimeSalary, .nightDuty, .dayNightDuty: "外勤"
         case .spot: "スポット"
         case .bonus: "賞与"
         case .other: "その他"
+        }
+    }
+
+    var normalized: IncomeCategory {
+        switch self {
+        case .nightDuty, .dayNightDuty:
+            .partTimeSalary
+        default:
+            self
         }
     }
 }
@@ -145,7 +157,7 @@ final class Employer {
     var defaultIncomeCategory: IncomeCategory? {
         get {
             guard let defaultIncomeCategoryRaw else { return nil }
-            return IncomeCategory(rawValue: defaultIncomeCategoryRaw)
+            return IncomeCategory(rawValue: defaultIncomeCategoryRaw)?.normalized
         }
         set { defaultIncomeCategoryRaw = newValue?.rawValue }
     }
@@ -201,7 +213,7 @@ final class PayRecord {
     }
 
     var incomeCategory: IncomeCategory {
-        get { IncomeCategory(rawValue: incomeCategoryRaw) ?? .other }
+        get { (IncomeCategory(rawValue: incomeCategoryRaw) ?? .other).normalized }
         set { incomeCategoryRaw = newValue.rawValue }
     }
 }
