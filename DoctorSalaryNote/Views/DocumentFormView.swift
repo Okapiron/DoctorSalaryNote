@@ -134,16 +134,18 @@ struct DocumentFormView: View {
             }
 
             Section("ファイル") {
-                HStack {
-                    Text(originalFileName ?? "未選択")
-                        .foregroundStyle(originalFileName == nil ? .secondary : .primary)
-                        .lineLimit(1)
-                    Spacer()
-                    if let fileSize {
-                        Text(byteCountText(fileSize))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if canPreview {
+                    NavigationLink {
+                        DocumentPreviewView(
+                            title: documentType.label,
+                            fileType: attachmentFileType,
+                            fileURL: previewFileURL
+                        )
+                    } label: {
+                        fileSummaryRow
                     }
+                } else {
+                    fileSummaryRow
                 }
 
                 Button {
@@ -164,18 +166,6 @@ struct DocumentFormView: View {
                     }
                 } label: {
                     Label(canPreview ? "カメラで撮り直す" : "カメラで撮影", systemImage: "camera")
-                }
-
-                if canPreview {
-                    NavigationLink {
-                        DocumentPreviewView(
-                            title: documentType.label,
-                            fileType: attachmentFileType,
-                            fileURL: previewFileURL
-                        )
-                    } label: {
-                        Label("プレビュー", systemImage: "eye")
-                    }
                 }
             }
 
@@ -240,6 +230,26 @@ struct DocumentFormView: View {
         }
 
         return DocumentFileStore.fileURL(for: document)
+    }
+
+    private var fileSummaryRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: attachmentFileType == .image ? "photo" : "doc")
+                .foregroundStyle(canPreview ? Color.cyan : Color.secondary)
+                .frame(width: 24)
+
+            Text(originalFileName ?? "未選択")
+                .foregroundStyle(originalFileName == nil ? .secondary : .primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if let fileSize {
+                Text(byteCountText(fileSize))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func applyPayRecordSelectionIfNeeded() {

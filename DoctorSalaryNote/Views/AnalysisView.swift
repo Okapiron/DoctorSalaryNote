@@ -150,7 +150,7 @@ struct AnalysisView: View {
 
     private var annualTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            trendInfographicChart(points: annualTrendPoints)
+            trendDataChart(points: annualTrendPoints)
 
             VStack(spacing: 0) {
                 ForEach(annualSummaries) { summary in
@@ -173,7 +173,7 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                trendInfographicChart(points: monthlyTrendPoints)
+                trendDataChart(points: monthlyTrendPoints)
 
                 VStack(spacing: 0) {
                     ForEach(monthlySummaries.filter { !$0.records.isEmpty }) { summary in
@@ -284,79 +284,96 @@ struct AnalysisView: View {
         }
     }
 
-    private func trendInfographicChart(points: [TrendPoint]) -> some View {
+    private func trendDataChart(points: [TrendPoint]) -> some View {
         let maxAmount = max(points.map(\.grossTotal).max() ?? 0, points.map(\.netTotal).max() ?? 0)
         let axisMax = niceAxisMax(for: maxAmount)
+        let chartWidth = max(CGFloat(points.count) * 56, 320)
 
-        return Chart {
-            ForEach(points) { point in
-                BarMark(
-                    x: .value("期間", point.label),
-                    y: .value("額面", point.grossTotal),
-                    width: .ratio(0.58)
-                )
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.cyan.opacity(0.62), Color.cyan.opacity(0.95)],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
-                )
-                .cornerRadius(4)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                LegendDot(color: .cyan, text: "総支給額")
+                LegendDot(color: .blue, text: "手取り")
             }
+            .font(.caption)
 
-            ForEach(points) { point in
-                LineMark(
-                    x: .value("期間", point.label),
-                    y: .value("手取り", point.netTotal)
-                )
-                .foregroundStyle(.blue)
-                .interpolationMethod(.catmullRom)
-                .lineStyle(.init(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            ScrollView(.horizontal, showsIndicators: false) {
+                Chart {
+                    ForEach(points) { point in
+                        BarMark(
+                            x: .value("期間", point.label),
+                            y: .value("総支給額", point.grossTotal),
+                            width: .ratio(0.56)
+                        )
+                        .foregroundStyle(Color.cyan.opacity(0.72))
+                        .cornerRadius(3)
+                    }
 
-                PointMark(
-                    x: .value("期間", point.label),
-                    y: .value("手取り", point.netTotal)
-                )
-                .foregroundStyle(.blue)
-                .symbolSize(42)
-            }
-        }
-        .chartYScale(domain: 0...axisMax)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
-                AxisGridLine()
-                    .foregroundStyle(Color(.systemGray4))
-                AxisTick()
-                    .foregroundStyle(Color(.systemGray4))
-                AxisValueLabel {
-                    if let amount = value.as(Int.self) {
-                        Text(shortYenText(amount))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                    ForEach(points) { point in
+                        LineMark(
+                            x: .value("期間", point.label),
+                            y: .value("手取り", point.netTotal)
+                        )
+                        .foregroundStyle(.blue)
+                        .interpolationMethod(.linear)
+                        .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
+
+                        PointMark(
+                            x: .value("期間", point.label),
+                            y: .value("手取り", point.netTotal)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(28)
                     }
                 }
-            }
-        }
-        .chartXAxis {
-            AxisMarks { _ in
-                AxisTick()
-                    .foregroundStyle(Color(.systemGray4))
-                AxisValueLabel()
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .chartPlotStyle { plotArea in
-            plotArea
-                .background(Color(.systemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(.systemGray5), lineWidth: 1)
+                .chartLegend(.hidden)
+                .chartYScale(domain: 0...axisMax)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine()
+                            .foregroundStyle(Color(.systemGray5))
+                        AxisTick()
+                            .foregroundStyle(Color(.systemGray4))
+                        AxisValueLabel {
+                            if let amount = value.as(Int.self) {
+                                Text(shortYenText(amount))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
                 }
+                .chartXAxis {
+                    AxisMarks(values: points.map(\.label)) { value in
+                        AxisTick()
+                            .foregroundStyle(Color(.systemGray4))
+                        AxisValueLabel(anchor: .top) {
+                            if let label = value.as(String.self) {
+                                Text(label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                    }
+                }
+                .chartPlotStyle { plotArea in
+                    plotArea
+                        .background(Color(.systemBackground))
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(Color(.systemGray5))
+                                .frame(height: 1)
+                        }
+                }
+                .frame(width: chartWidth, height: 220)
+            }
+            .scrollClipDisabled()
+
+            Text("棒は総支給額、線は手取りを表します。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
-        .frame(height: 190)
     }
 }
 
@@ -618,7 +635,6 @@ private struct InfographicBreakdownRow: View {
             .frame(height: 12)
 
             HStack {
-                Text("\(summary.count)件")
                 Spacer()
                 Text("手取り \(shortYenText(summary.netTotal))")
             }

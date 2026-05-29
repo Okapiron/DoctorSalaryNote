@@ -245,7 +245,7 @@ private struct PayRecordRow: View {
                     }
                 }
 
-                Text("給与明細・\(record.monthLabel)")
+                Text(record.monthLabel)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

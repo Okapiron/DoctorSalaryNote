@@ -249,16 +249,18 @@ struct PayRecordFormView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            HStack {
-                Text(pendingDocumentOriginalFileName ?? "未選択")
-                    .foregroundStyle(pendingDocumentOriginalFileName == nil ? .secondary : .primary)
-                    .lineLimit(1)
-                Spacer()
-                if let pendingDocumentFileSize {
-                    Text(byteCountText(pendingDocumentFileSize))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if let pendingDocumentFileURL {
+                NavigationLink {
+                    DocumentPreviewView(
+                        title: pendingDocumentType.label,
+                        fileType: pendingDocumentFileType,
+                        fileURL: pendingDocumentFileURL
+                    )
+                } label: {
+                    pendingDocumentSummaryRow
                 }
+            } else {
+                pendingDocumentSummaryRow
             }
 
             Button {
@@ -281,19 +283,28 @@ struct PayRecordFormView: View {
                 Label(pendingDocumentFileURL == nil ? "カメラで撮影" : "カメラで撮り直す", systemImage: "camera")
             }
 
-            if let pendingDocumentFileURL {
-                NavigationLink {
-                    DocumentPreviewView(
-                        title: pendingDocumentType.label,
-                        fileType: pendingDocumentFileType,
-                        fileURL: pendingDocumentFileURL
-                    )
-                } label: {
-                    Label("プレビュー", systemImage: "eye")
-                }
-            }
         }
         .padding(.vertical, 2)
+    }
+
+    private var pendingDocumentSummaryRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: pendingDocumentFileType == .image ? "photo" : "doc")
+                .foregroundStyle(pendingDocumentFileURL == nil ? Color.secondary : Color.cyan)
+                .frame(width: 24)
+
+            Text(pendingDocumentOriginalFileName ?? "未選択")
+                .foregroundStyle(pendingDocumentOriginalFileName == nil ? .secondary : .primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if let pendingDocumentFileSize {
+                Text(byteCountText(pendingDocumentFileSize))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var pendingDocumentType: DocumentType {
@@ -301,16 +312,25 @@ struct PayRecordFormView: View {
     }
 
     private func currencyField(_ title: String, text: Binding<String>) -> some View {
-        TextField(title, text: Binding(
-            get: {
-                text.wrappedValue
-            },
-            set: { newValue in
-                text.wrappedValue = groupedAmountText(from: newValue)
-            }
-        ))
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            TextField("0", text: Binding(
+                get: {
+                    text.wrappedValue
+                },
+                set: { newValue in
+                    text.wrappedValue = groupedAmountText(from: newValue)
+                }
+            ))
             .keyboardType(.numberPad)
             .multilineTextAlignment(.trailing)
+            .font(.body.monospacedDigit())
+            .frame(maxWidth: 180)
+        }
     }
 
     private func documentLabel(_ document: DocumentAttachment) -> some View {
