@@ -1,6 +1,7 @@
 import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct DocumentFormView: View {
@@ -33,20 +34,28 @@ struct DocumentFormView: View {
     @State private var fileSize: Int?
     @State private var attachmentFileType: AttachmentFileType
     @State private var validationMessage: String?
+    @State private var isShowingValidation = false
     @State private var isPickingPDF = false
+    @State private var isShowingCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var pendingOldFileURLToDelete: URL?
     @State private var pendingNewFileURL: URL?
 
-    init(document: DocumentAttachment? = nil, linkedPayRecord: PayRecord? = nil, initialYear: Int = Calendar.current.component(.year, from: Date())) {
+    init(
+        document: DocumentAttachment? = nil,
+        linkedPayRecord: PayRecord? = nil,
+        initialYear: Int = Calendar.current.component(.year, from: Date()),
+        initialDocumentType: DocumentType? = nil,
+        initialEmployer: Employer? = nil
+    ) {
         self.document = document
         self.linkedPayRecord = linkedPayRecord
         let initialPayRecord = document?.payRecord ?? linkedPayRecord
-        let initialType = document?.documentType ?? (linkedPayRecord?.incomeCategory == .bonus ? .bonusPayslip : .payslip)
+        let initialType = document?.documentType ?? initialDocumentType ?? (linkedPayRecord?.incomeCategory == .bonus ? .bonusPayslip : .payslip)
 
         _documentType = State(initialValue: initialType)
         _documentYear = State(initialValue: document?.documentYear ?? initialPayRecord?.paymentYear ?? initialYear)
-        _selectedEmployerID = State(initialValue: document?.employer?.persistentModelID ?? initialPayRecord?.employer?.persistentModelID)
+        _selectedEmployerID = State(initialValue: document?.employer?.persistentModelID ?? initialPayRecord?.employer?.persistentModelID ?? initialEmployer?.persistentModelID)
         _selectedPayRecordID = State(initialValue: initialPayRecord?.persistentModelID)
         _memo = State(initialValue: document?.memo ?? "")
         _localFilePath = State(initialValue: document?.localFilePath)
@@ -112,7 +121,7 @@ struct DocumentFormView: View {
                     }
                 } else {
                     Stepper(value: $documentYear, in: 2000...2100) {
-                        Text("対象年 \(documentYear)年")
+                        Text(verbatim: "対象年 \(documentYear)年")
                     }
 
                     Picker(documentType.requiresEmployer ? "勤務先（必須）" : "勤務先", selection: $selectedEmployerID) {
@@ -147,6 +156,16 @@ struct DocumentFormView: View {
                     Label("画像を選択", systemImage: "photo")
                 }
 
+                Button {
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        isShowingCamera = true
+                    } else {
+                        showValidation("この端末ではカメラを使用できません。画像選択またはPDF選択を使ってください。")
+                    }
+                } label: {
+                    Label(canPreview ? "カメラで撮り直す" : "カメラで撮影", systemImage: "camera")
+                }
+
                 if canPreview {
                     NavigationLink {
                         DocumentPreviewView(
@@ -164,10 +183,10 @@ struct DocumentFormView: View {
                 TextEditor(text: $memo)
                     .frame(minHeight: 120)
             }
-
             if let validationMessage {
                 Section {
-                    Text(validationMessage)
+                    Label(validationMessage, systemImage: "exclamationmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.red)
                 }
             }
@@ -197,6 +216,17 @@ struct DocumentFormView: View {
             Task {
                 await handlePhotoImport(newItem)
             }
+        }
+        .sheet(isPresented: $isShowingCamera) {
+            CameraCaptureView { image in
+                handleCapturedImage(image)
+            }
+            .ignoresSafeArea()
+        }
+        .alert("保存できません", isPresented: $isShowingValidation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(validationMessage ?? "入力内容を確認してください。")
         }
     }
 
@@ -230,7 +260,7 @@ struct DocumentFormView: View {
 
         if documentType.requiresPayRecord {
             guard let selectedPayRecord else {
-                validationMessage = "給与明細・賞与明細は、紐づける明細を選択してください。未登録の場合は先に明細を追加してください。"
+                showValidation("給与明細・賞与明細は、紐づける明細を選択してください。未登録の場合は先に明細を追加してください。")
                 return
             }
             resolvedPayRecord = selectedPayRecord
@@ -238,13 +268,13 @@ struct DocumentFormView: View {
             resolvedYear = selectedPayRecord.paymentYear
         } else if documentType.requiresEmployer {
             guard resolvedEmployer != nil else {
-                validationMessage = "\(documentType.label)は勤務先を選択してください。"
+                showValidation("\(documentType.label)は勤務先を選択してください。")
                 return
             }
         }
 
         guard localFilePath != nil || storedFileName != nil else {
-            validationMessage = "PDFまたは画像ファイルを選択してください。"
+            showValidation("PDFまたは画像ファイルを選択してください。")
             return
         }
 
@@ -284,7 +314,7 @@ struct DocumentFormView: View {
             DocumentFileStore.deleteFile(at: pendingOldFileURLToDelete)
             dismiss()
         } catch {
-            validationMessage = "書類の保存に失敗しました。もう一度お試しください。"
+            showValidation("書類の保存に失敗しました。もう一度お試しください。")
         }
     }
 
@@ -292,16 +322,16 @@ struct DocumentFormView: View {
         switch result {
         case .success(let urls):
             guard let url = urls.first else {
-                validationMessage = "PDFファイルを選択できませんでした。"
+                showValidation("PDFファイルを選択できませんでした。")
                 return
             }
             do {
                 try replaceFile(with: DocumentFileStore.saveSecurityScopedFile(from: url, fileType: .pdf))
             } catch {
-                validationMessage = "PDFの保存に失敗しました。もう一度お試しください。"
+                showValidation("PDFの保存に失敗しました。もう一度お試しください。")
             }
         case .failure:
-            validationMessage = "PDFの取込に失敗しました。"
+            showValidation("PDFの取込に失敗しました。")
         }
     }
 
@@ -309,7 +339,7 @@ struct DocumentFormView: View {
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
                 await MainActor.run {
-                    validationMessage = "画像を読み込めませんでした。"
+                    showValidation("画像を読み込めませんでした。")
                 }
                 return
             }
@@ -321,8 +351,22 @@ struct DocumentFormView: View {
             }
         } catch {
             await MainActor.run {
-                validationMessage = "画像の保存に失敗しました。もう一度お試しください。"
+                showValidation("画像の保存に失敗しました。もう一度お試しください。")
             }
+        }
+    }
+
+    private func handleCapturedImage(_ image: UIImage) {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            showValidation("撮影した画像を保存できませんでした。もう一度お試しください。")
+            return
+        }
+
+        do {
+            let storedFile = try DocumentFileStore.saveData(data, originalFileName: "撮影画像.jpg", fileType: .image)
+            replaceFile(with: storedFile)
+        } catch {
+            showValidation("撮影した画像の保存に失敗しました。もう一度お試しください。")
         }
     }
 
@@ -361,5 +405,48 @@ struct DocumentFormView: View {
 
     private func byteCountText(_ byteCount: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file)
+    }
+
+    private func showValidation(_ message: String) {
+        validationMessage = message
+        isShowingValidation = true
+    }
+}
+
+private struct CameraCaptureView: UIViewControllerRepresentable {
+    @Environment(\.dismiss) private var dismiss
+
+    let onImageCaptured: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        private let parent: CameraCaptureView
+
+        init(parent: CameraCaptureView) {
+            self.parent = parent
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.onImageCaptured(image)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
     }
 }

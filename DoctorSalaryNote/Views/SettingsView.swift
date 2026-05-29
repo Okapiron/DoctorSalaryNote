@@ -120,7 +120,7 @@ struct SettingsView: View {
         } header: {
             Text("CSV出力")
         } footer: {
-            Text("給与明細を年別または全期間で出力します。年度別CSVは今後の対応予定です。")
+            Text("給与明細を年別または全期間で出力します。")
         }
     }
 

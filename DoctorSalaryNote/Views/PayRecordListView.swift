@@ -9,6 +9,10 @@ struct PayRecordListView: View {
         SortDescriptor(\PayRecord.createdAt, order: .reverse)
     ]) private var payRecords: [PayRecord]
 
+    @Query(sort: [
+        SortDescriptor(\DocumentAttachment.createdAt, order: .reverse)
+    ]) private var documentAttachments: [DocumentAttachment]
+
     @State private var isAddingPayRecord = false
 
     var body: some View {
@@ -29,6 +33,12 @@ struct PayRecordListView: View {
                                 HStack {
                                     Text(record.employer?.name ?? "勤務先未設定")
                                         .font(.headline)
+                                    if hasLinkedDocument(for: record) {
+                                        Image(systemName: "paperclip")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.teal)
+                                            .accessibilityLabel("添付書類あり")
+                                    }
                                     Spacer()
                                     Text(record.monthLabel)
                                         .font(.subheadline)
@@ -42,8 +52,9 @@ struct PayRecordListView: View {
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 4) {
                                         Text("額面 \(record.grossAmount.yenText)")
+                                            .foregroundStyle(.primary)
                                         Text("手取り \(record.netAmount.yenText)")
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(.teal)
                                     }
                                     .font(.subheadline)
                                 }
@@ -86,6 +97,12 @@ struct PayRecordListView: View {
         }
 
         try? modelContext.save()
+    }
+
+    private func hasLinkedDocument(for record: PayRecord) -> Bool {
+        documentAttachments.contains {
+            $0.payRecord?.persistentModelID == record.persistentModelID
+        }
     }
 }
 

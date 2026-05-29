@@ -16,6 +16,7 @@ struct PayRecordFormView: View {
     ]) private var documentAttachments: [DocumentAttachment]
 
     private let payRecord: PayRecord?
+    private let initialEmployer: Employer?
 
     @State private var selectedEmployerID: PersistentIdentifier?
     @State private var paymentYear: Int
@@ -30,14 +31,17 @@ struct PayRecordFormView: View {
     @State private var otherDeductionAmountText: String
     @State private var memo: String
     @State private var validationMessage: String?
+    @State private var isShowingValidation = false
     @State private var isAddingEmployer = false
 
-    init(payRecord: PayRecord? = nil) {
+    init(payRecord: PayRecord? = nil, initialEmployer: Employer? = nil) {
         self.payRecord = payRecord
-        _selectedEmployerID = State(initialValue: payRecord?.employer?.persistentModelID)
+        self.initialEmployer = initialEmployer
+        let resolvedEmployer = payRecord?.employer ?? initialEmployer
+        _selectedEmployerID = State(initialValue: resolvedEmployer?.persistentModelID)
         _paymentYear = State(initialValue: payRecord?.paymentYear ?? Calendar.current.component(.year, from: Date()))
         _paymentMonth = State(initialValue: payRecord?.paymentMonth ?? Calendar.current.component(.month, from: Date()))
-        _incomeCategory = State(initialValue: payRecord?.incomeCategory ?? .partTimeSalary)
+        _incomeCategory = State(initialValue: payRecord?.incomeCategory ?? initialEmployer?.defaultIncomeCategory ?? .partTimeSalary)
         _grossAmountText = State(initialValue: payRecord?.grossAmount.formText ?? "")
         _netAmountText = State(initialValue: payRecord?.netAmount.formText ?? "")
         _deductionAmountText = State(initialValue: payRecord?.deductionAmount?.formText ?? "")
@@ -71,6 +75,14 @@ struct PayRecordFormView: View {
 
     var body: some View {
         Form {
+            if let validationMessage {
+                Section {
+                    Label(validationMessage, systemImage: "exclamationmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("支給情報") {
                 if selectableEmployers.isEmpty {
                     Text("給与明細を登録するには、先に勤務先が必要です。常勤先、外勤先、当直先などを登録してください。")
@@ -106,7 +118,7 @@ struct PayRecordFormView: View {
                 }
 
                 Stepper(value: $paymentYear, in: 2000...2100) {
-                    Text("支給年 \(paymentYear)年")
+                    Text(verbatim: "支給年 \(paymentYear)年")
                 }
 
                 Picker("支給月", selection: $paymentMonth) {
@@ -143,9 +155,17 @@ struct PayRecordFormView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(linkedDocuments) { document in
-                            NavigationLink {
-                                DocumentFormView(document: document)
-                            } label: {
+                            if let fileURL = DocumentFileStore.fileURL(for: document) {
+                                NavigationLink {
+                                    DocumentPreviewView(
+                                        title: document.documentType.label,
+                                        fileType: document.attachmentFileType,
+                                        fileURL: fileURL
+                                    )
+                                } label: {
+                                    documentLabel(document)
+                                }
+                            } else {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(document.documentType.label)
                                     Text(document.originalFileName ?? "ファイル名未設定")
@@ -161,13 +181,6 @@ struct PayRecordFormView: View {
                     } label: {
                         Label("書類を添付", systemImage: "paperclip")
                     }
-                }
-            }
-
-            if let validationMessage {
-                Section {
-                    Text(validationMessage)
-                        .foregroundStyle(.red)
                 }
             }
         }
@@ -188,26 +201,55 @@ struct PayRecordFormView: View {
                 EmployerFormView()
             }
         }
+        .alert("保存できません", isPresented: $isShowingValidation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(validationMessage ?? "入力内容を確認してください。")
+        }
     }
 
     private func currencyField(_ title: String, text: Binding<String>) -> some View {
-        TextField(title, text: text)
+        TextField(title, text: Binding(
+            get: {
+                text.wrappedValue
+            },
+            set: { newValue in
+                text.wrappedValue = groupedAmountText(from: newValue)
+            }
+        ))
             .keyboardType(.numberPad)
+            .multilineTextAlignment(.trailing)
+    }
+
+    private func documentLabel(_ document: DocumentAttachment) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(document.documentType.label)
+                Spacer()
+                Image(systemName: "eye")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(document.originalFileName ?? "ファイル名未設定")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private func save() {
         guard let selectedEmployer else {
-            validationMessage = "勤務先を選択してください。"
+            showValidation("勤務先を選択してください。")
             return
         }
 
         guard let grossAmount = requiredAmount(from: grossAmountText) else {
-            validationMessage = "額面は0以上の整数で入力してください。"
+            showValidation("額面は0以上の整数で入力してください。")
             return
         }
 
         guard let netAmount = requiredAmount(from: netAmountText) else {
-            validationMessage = "手取りは0以上の整数で入力してください。"
+            showValidation("手取りは0以上の整数で入力してください。")
             return
         }
 
@@ -216,7 +258,7 @@ struct PayRecordFormView: View {
               let residentTaxAmount = optionalAmount(from: residentTaxAmountText),
               let socialInsuranceAmount = optionalAmount(from: socialInsuranceAmountText),
               let otherDeductionAmount = optionalAmount(from: otherDeductionAmountText) else {
-            validationMessage = "任意の金額項目も、入力する場合は0以上の整数にしてください。"
+            showValidation("任意の金額項目も、入力する場合は0以上の整数にしてください。")
             return
         }
 
@@ -252,8 +294,12 @@ struct PayRecordFormView: View {
             modelContext.insert(newRecord)
         }
 
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            showValidation("保存に失敗しました。もう一度お試しください。")
+        }
     }
 
     private func requiredAmount(from text: String) -> Int? {
@@ -284,10 +330,29 @@ struct PayRecordFormView: View {
             .replacingOccurrences(of: "円", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private func groupedAmountText(from text: String) -> String {
+        let normalizedText = normalizedAmountText(from: text)
+        let digits = normalizedText.filter(\.isNumber)
+        guard !digits.isEmpty, let value = Int(digits) else {
+            return ""
+        }
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: value)) ?? digits
+    }
+
+    private func showValidation(_ message: String) {
+        validationMessage = message
+        isShowingValidation = true
+    }
 }
 
 private extension Int {
     var formText: String {
-        String(self)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: self)) ?? String(self)
     }
 }

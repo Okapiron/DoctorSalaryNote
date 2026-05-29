@@ -10,6 +10,7 @@ struct EmployerListView: View {
 
     @State private var isAddingEmployer = false
     @State private var blockedEmployerName: String?
+    @State private var payRecordEmployer: Employer?
 
     private var displayedEmployers: [Employer] {
         employers.sorted { lhs, rhs in
@@ -58,6 +59,14 @@ struct EmployerListView: View {
                             }
                         }
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        Button {
+                            payRecordEmployer = employer
+                        } label: {
+                            Label("明細追加", systemImage: "yensign.circle")
+                        }
+                        .tint(.teal)
+                    }
                 }
                 .onDelete(perform: deleteEmployers)
             }
@@ -75,6 +84,11 @@ struct EmployerListView: View {
         .sheet(isPresented: $isAddingEmployer) {
             NavigationStack {
                 EmployerFormView()
+            }
+        }
+        .sheet(item: $payRecordEmployer) { employer in
+            NavigationStack {
+                PayRecordFormView(initialEmployer: employer)
             }
         }
         .alert("削除できません", isPresented: Binding(

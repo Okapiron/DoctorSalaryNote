@@ -9,53 +9,48 @@ struct HomeSummaryView: View {
         SortDescriptor(\PayRecord.createdAt, order: .reverse)
     ]) private var payRecords: [PayRecord]
 
-    @Query private var appSettings: [AppSettings]
     @Query private var documentAttachments: [DocumentAttachment]
 
-    @State private var viewMode: ViewMode = .calendarYear
-    @State private var selectedPeriod: Int = Calendar.current.component(.year, from: Date())
+    @State private var selectedYear = Calendar.current.component(.year, from: Date())
 
-    private var fiscalYearStartMonth: Int {
-        let configuredMonth = appSettings.first?.fiscalYearStartMonth ?? 4
-        return min(max(configuredMonth, 1), 12)
+    private var latestMonthKey: MonthKey {
+        if let record = payRecords.first {
+            return MonthKey(year: record.paymentYear, month: record.paymentMonth)
+        }
+
+        let now = Date()
+        let calendar = Calendar.current
+        return MonthKey(
+            year: calendar.component(.year, from: now),
+            month: calendar.component(.month, from: now)
+        )
     }
 
-    private var selectedPeriodTitle: String {
-        switch viewMode {
-        case .calendarYear:
-            "\(selectedPeriod)年"
-        case .fiscalYear:
-            "\(selectedPeriod)年度"
+    private var recentMonthSummaries: [HomeMonthSummary] {
+        (0..<6).reversed().map { offset in
+            let key = latestMonthKey.addingMonths(-offset)
+            let records = payRecords.filter {
+                $0.paymentYear == key.year && $0.paymentMonth == key.month
+            }
+            return HomeMonthSummary(key: key, records: records)
         }
     }
 
-    private var selectedRecords: [PayRecord] {
-        payRecords.filter {
-            periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth) == selectedPeriod
-        }
+    private var latestMonthSummary: HomeMonthSummary {
+        HomeMonthSummary(
+            key: latestMonthKey,
+            records: payRecords.filter {
+                $0.paymentYear == latestMonthKey.year && $0.paymentMonth == latestMonthKey.month
+            }
+        )
     }
 
-    private var summary: HomeSummary {
-        HomeSummary(records: selectedRecords)
+    private var selectedYearRecords: [PayRecord] {
+        payRecords.filter { $0.paymentYear == selectedYear }
     }
 
-    private var chartItems: [GrossTrendItem] {
-        let latestPeriod = max(selectedPeriod, payRecords.map {
-            periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth)
-        }.max() ?? selectedPeriod)
-
-        return (0..<5).reversed().map { offset in
-            let period = latestPeriod - offset
-            let grossAmount = payRecords
-                .filter { periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth) == period }
-                .reduce(0) { $0 + $1.grossAmount }
-
-            return GrossTrendItem(
-                period: period,
-                label: periodLabel(for: period),
-                grossAmount: grossAmount
-            )
-        }
+    private var selectedYearSummary: HomeYearSummary {
+        HomeYearSummary(year: selectedYear, records: selectedYearRecords)
     }
 
     private var recentRecords: [PayRecord] {
@@ -64,26 +59,16 @@ struct HomeSummaryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Picker("表示方法", selection: $viewMode) {
-                    ForEach(ViewMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: viewMode) { _, newMode in
-                    selectedPeriod = currentPeriod(for: newMode)
-                }
-
-                periodSelector
-
-                grossTrendSection
-                summarySection
+            VStack(alignment: .leading, spacing: 18) {
+                monthlyTrendSection
+                latestMonthSection
+                yearSummarySection
                 recentRecordsSection
                 documentAlertSection
             }
             .padding()
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("ホーム")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -96,111 +81,115 @@ struct HomeSummaryView: View {
         }
     }
 
-    private var periodSelector: some View {
-        Stepper(value: $selectedPeriod, in: 2000...2100) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(selectedPeriodTitle)
-                    .font(.title2.weight(.semibold))
-                Text(periodDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var periodDescription: String {
-        switch viewMode {
-        case .calendarYear:
-            "1月〜12月"
-        case .fiscalYear:
-            fiscalYearStartMonth == 1 ? "1月〜12月" : "\(fiscalYearStartMonth)月〜翌\(fiscalYearStartMonth - 1)月"
-        }
-    }
-
-    private var grossTrendSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("額面推移")
-                    .font(.headline)
-                Text("直近5期間の額面合計")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if payRecords.isEmpty {
-                ContentUnavailableView(
-                    "給与明細を登録すると、ここに額面推移が表示されます",
-                    systemImage: "chart.bar",
-                    description: Text("まずは明細タブで勤務先と給与明細を登録してください。")
+    private var monthlyTrendSection: some View {
+        homeCard(tint: .teal) {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader(
+                    title: "直近の月別給与",
+                    subtitle: "最近6か月の額面と手取り"
                 )
-                .frame(minHeight: 180)
-            } else {
-                Chart(chartItems) { item in
-                    BarMark(
-                        x: .value("期間", item.label),
-                        y: .value("額面", item.grossAmount)
+
+                if payRecords.isEmpty {
+                    ContentUnavailableView(
+                        "給与明細を登録すると、月別の推移が表示されます",
+                        systemImage: "chart.bar.xaxis",
+                        description: Text("まずは勤務先と給与明細を登録してください。")
                     )
-                    .foregroundStyle(.blue)
-                    .annotation(position: .top) {
-                        if item.grossAmount > 0 {
-                            Text(shortYenText(item.grossAmount))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                    .frame(minHeight: 170)
+                } else {
+                    Chart {
+                        ForEach(recentMonthSummaries) { summary in
+                            BarMark(
+                                x: .value("月", summary.shortLabel),
+                                y: .value("額面", summary.grossTotal)
+                            )
+                            .foregroundStyle(.teal.gradient)
+                            .cornerRadius(4)
+
+                            LineMark(
+                                x: .value("月", summary.shortLabel),
+                                y: .value("手取り", summary.netTotal)
+                            )
+                            .foregroundStyle(.blue)
+                            .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                            PointMark(
+                                x: .value("月", summary.shortLabel),
+                                y: .value("手取り", summary.netTotal)
+                            )
+                            .foregroundStyle(.blue)
                         }
                     }
-                }
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let amount = value.as(Int.self) {
-                                Text(shortYenText(amount))
+                    .chartYAxis {
+                        AxisMarks { value in
+                            AxisGridLine()
+                            AxisValueLabel {
+                                if let amount = value.as(Int.self) {
+                                    Text(shortYenText(amount))
+                                }
                             }
                         }
                     }
-                }
-                .frame(height: 220)
-            }
-        }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(.quaternary)
-        )
-    }
-
-    private var summarySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(selectedPeriodTitle)のサマリー")
-                    .font(.headline)
-
-                if selectedRecords.isEmpty {
-                    Text("この期間の明細はまだありません。期間を切り替えるか、明細タブから登録してください。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .frame(height: 190)
                 }
             }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                summaryItem(title: "額面合計", value: yenText(summary.grossTotal))
-                summaryItem(title: "手取り合計", value: yenText(summary.netTotal))
-                summaryItem(title: "控除合計", value: yenText(summary.deductionTotal))
-                summaryItem(title: "手取り率", value: summary.takeHomeRateText)
-            }
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(.quaternary)
-        )
     }
 
-    private func summaryItem(title: String, value: String) -> some View {
+    private var latestMonthSection: some View {
+        homeCard(tint: .blue) {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeader(
+                    title: "\(latestMonthSummary.longLabel)の給与",
+                    subtitle: latestMonthSummary.records.isEmpty ? "この月の明細はまだありません" : "\(latestMonthSummary.records.count)件の明細"
+                )
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal), color: .teal)
+                    summaryItem(title: "手取り", value: yenText(latestMonthSummary.netTotal), color: .blue)
+                    summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal), color: .orange)
+                    summaryItem(title: "手取り率", value: latestMonthSummary.takeHomeRateText, color: .green)
+                }
+            }
+        }
+    }
+
+    private var yearSummarySection: some View {
+        homeCard(tint: .indigo) {
+            VStack(alignment: .leading, spacing: 12) {
+                Stepper(value: $selectedYear, in: 2000...2100) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(verbatim: "\(selectedYear)年の合計")
+                            .font(.headline)
+                        Text("税務・書類整理で使う年別の集計")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    compactAmount("額面", selectedYearSummary.grossTotal)
+                    compactAmount("手取り", selectedYearSummary.netTotal)
+                    compactAmount("控除", selectedYearSummary.deductionTotal)
+                }
+            }
+        }
+    }
+
+    private func compactAmount(_ title: String, _ amount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(shortYenText(amount))
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func summaryItem(title: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption)
@@ -212,144 +201,126 @@ struct HomeSummaryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.thinMaterial)
+        .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var recentRecordsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("最近の明細")
-                .font(.headline)
+        homeCard(tint: .mint) {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader(title: "最近の明細", subtitle: "登録した給与明細をすぐ確認")
 
-            if recentRecords.isEmpty {
-                Text("給与明細を登録すると、直近5件がここに表示されます。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(recentRecords) { record in
-                        NavigationLink {
-                            PayRecordFormView(payRecord: record)
-                        } label: {
-                            HStack(spacing: 12) {
-                                RecentPayRecordRow(record: record)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
+                if recentRecords.isEmpty {
+                    Text("給与明細を登録すると、直近5件がここに表示されます。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(recentRecords) { record in
+                            NavigationLink {
+                                PayRecordFormView(payRecord: record)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    RecentPayRecordRow(record: record)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
                             }
-                        }
-                        .buttonStyle(.plain)
+                            .buttonStyle(.plain)
 
-                        if record.persistentModelID != recentRecords.last?.persistentModelID {
-                            Divider()
+                            if record.persistentModelID != recentRecords.last?.persistentModelID {
+                                Divider()
+                            }
                         }
                     }
                 }
             }
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(.quaternary)
-        )
     }
 
     private var documentAlertSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("書類チェック", systemImage: "doc.text.magnifyingglass")
-                    .font(.headline)
-                Spacer()
-                Text("\(documentAttachments.count)件")
-                    .font(.subheadline.weight(.semibold))
+        homeCard(tint: .orange) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("書類チェック", systemImage: "doc.text.magnifyingglass")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(documentAttachments.count)件")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(documentAttachments.isEmpty ? "書類を登録すると、ここに保存件数が表示されます。" : "源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
 
-            Text(documentAttachments.isEmpty ? "書類を登録すると、ここに保存件数が表示されます。" : "源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private func homeCard<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.background)
+                    .shadow(color: tint.opacity(0.10), radius: 10, y: 4)
+            )
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tint.gradient)
+                    .frame(width: 4)
+                    .padding(.vertical, 14)
+            }
+    }
 
-            Text("年別・勤務先別に整理できます")
+    private func sectionHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+            Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding()
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(.quaternary)
-        )
-    }
-
-    private func currentPeriod(for mode: ViewMode) -> Int {
-        let now = Date()
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: now)
-        let month = calendar.component(.month, from: now)
-
-        switch mode {
-        case .calendarYear:
-            return year
-        case .fiscalYear:
-            return month >= fiscalYearStartMonth ? year : year - 1
-        }
-    }
-
-    private func periodKey(for record: PayRecord, viewMode: ViewMode, fiscalYearStartMonth: Int) -> Int {
-        switch viewMode {
-        case .calendarYear:
-            return record.paymentYear
-        case .fiscalYear:
-            return record.paymentMonth >= fiscalYearStartMonth ? record.paymentYear : record.paymentYear - 1
-        }
-    }
-
-    private func periodLabel(for period: Int) -> String {
-        switch viewMode {
-        case .calendarYear:
-            return "\(period)年"
-        case .fiscalYear:
-            return "\(period)年度"
-        }
     }
 }
 
-private struct HomeSummary {
-    let grossTotal: Int
-    let netTotal: Int
-    let deductionTotal: Int
+private struct MonthKey: Hashable {
+    let year: Int
+    let month: Int
 
-    init(records: [PayRecord]) {
-        grossTotal = records.reduce(0) { $0 + $1.grossAmount }
-        netTotal = records.reduce(0) { $0 + $1.netAmount }
-        deductionTotal = records.reduce(0) { partialResult, record in
-            partialResult + (record.deductionAmount ?? max(record.grossAmount - record.netAmount, 0))
-        }
+    func addingMonths(_ offset: Int) -> MonthKey {
+        let zeroBasedIndex = year * 12 + (month - 1) + offset
+        return MonthKey(year: zeroBasedIndex / 12, month: zeroBasedIndex % 12 + 1)
     }
+}
+
+private struct HomeMonthSummary: Identifiable {
+    let key: MonthKey
+    let records: [PayRecord]
+
+    var id: MonthKey { key }
+    var shortLabel: String { "\(key.month)月" }
+    var longLabel: String { "\(key.year)年\(key.month)月" }
+    var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var deductionTotal: Int { records.reduce(0) { $0 + ($1.deductionAmount ?? max($1.grossAmount - $1.netAmount, 0)) } }
 
     var takeHomeRateText: String {
-        guard grossTotal > 0 else {
-            return "-"
-        }
-
-        let rate = Double(netTotal) / Double(grossTotal) * 100
-        return String(format: "%.1f%%", rate)
+        guard grossTotal > 0 else { return "-" }
+        return String(format: "%.1f%%", Double(netTotal) / Double(grossTotal) * 100)
     }
 }
 
-private struct GrossTrendItem: Identifiable {
-    let period: Int
-    let label: String
-    let grossAmount: Int
+private struct HomeYearSummary {
+    let year: Int
+    let records: [PayRecord]
 
-    var id: Int {
-        period
-    }
+    var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var deductionTotal: Int { records.reduce(0) { $0 + ($1.deductionAmount ?? max($1.grossAmount - $1.netAmount, 0)) } }
 }
 
 private struct RecentPayRecordRow: View {
@@ -358,7 +329,7 @@ private struct RecentPayRecordRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("\(record.paymentYear)年\(record.paymentMonth)月")
+                Text(verbatim: "\(record.paymentYear)年\(record.paymentMonth)月")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
                 Text(record.incomeCategory.label)
@@ -374,7 +345,7 @@ private struct RecentPayRecordRow: View {
                 Text("額面 \(yenText(record.grossAmount))")
                 Spacer()
                 Text("手取り \(yenText(record.netAmount))")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.teal)
             }
             .font(.caption)
         }

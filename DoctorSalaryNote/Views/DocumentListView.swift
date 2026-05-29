@@ -22,6 +22,7 @@ struct DocumentListView: View {
 
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingDocument = false
+    @State private var documentDraft: DocumentDraft?
 
     private var yearPayRecords: [PayRecord] {
         payRecords.filter { $0.paymentYear == selectedYear }
@@ -56,7 +57,7 @@ struct DocumentListView: View {
             Section {
                 Stepper(value: $selectedYear, in: 2000...2100) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(selectedYear)年")
+                        Text(verbatim: "\(selectedYear)年")
                             .font(.title3.weight(.semibold))
                         Text("書類管理は年別で表示します")
                             .font(.caption)
@@ -85,6 +86,21 @@ struct DocumentListView: View {
                                 statusText("源泉徴収票", summary.withholdingStatus)
                                 Spacer()
                                 statusText("支払調書", summary.paymentStatementStatus)
+                            }
+
+                            if summary.withholdingStatus == .missing, let employer = summary.employer {
+                                Button {
+                                    documentDraft = DocumentDraft(
+                                        documentType: .withholdingSlip,
+                                        year: selectedYear,
+                                        employer: employer
+                                    )
+                                } label: {
+                                    Label("源泉徴収票を登録", systemImage: "plus.circle")
+                                }
+                                .font(.subheadline.weight(.semibold))
+                                .buttonStyle(.borderless)
+                                .tint(.teal)
                             }
                         }
                         .padding(.vertical, 4)
@@ -123,6 +139,15 @@ struct DocumentListView: View {
                 DocumentFormView(initialYear: selectedYear)
             }
         }
+        .sheet(item: $documentDraft) { draft in
+            NavigationStack {
+                DocumentFormView(
+                    initialYear: draft.year,
+                    initialDocumentType: draft.documentType,
+                    initialEmployer: draft.employer
+                )
+            }
+        }
     }
 
     private func statusText(_ title: String, _ status: DocumentStatus) -> some View {
@@ -147,6 +172,7 @@ struct DocumentListView: View {
 
         return DocumentWorkplaceSummary(
             id: employer?.persistentModelID.hashValue ?? -1,
+            employer: employer,
             employerName: employer?.name ?? "勤務先未設定",
             payRecordCount: records.count,
             payslipDocumentCount: payslipDocumentCount,
@@ -168,6 +194,7 @@ struct DocumentListView: View {
 
 private struct DocumentWorkplaceSummary: Identifiable {
     let id: Int
+    let employer: Employer?
     let employerName: String
     let payRecordCount: Int
     let payslipDocumentCount: Int
@@ -175,7 +202,14 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let paymentStatementStatus: DocumentStatus
 }
 
-private enum DocumentStatus {
+private struct DocumentDraft: Identifiable {
+    let id = UUID()
+    let documentType: DocumentType
+    let year: Int
+    let employer: Employer
+}
+
+private enum DocumentStatus: Equatable {
     case registered
     case missing
     case none

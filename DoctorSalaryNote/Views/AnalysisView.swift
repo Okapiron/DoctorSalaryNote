@@ -9,97 +9,40 @@ struct AnalysisView: View {
         SortDescriptor(\PayRecord.createdAt, order: .reverse)
     ]) private var payRecords: [PayRecord]
 
-    @Query private var appSettings: [AppSettings]
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    @State private var trendScope: AnalysisTrendScope = .monthly
 
-    @State private var viewMode: ViewMode = .calendarYear
-    @State private var selectedPeriod: Int = Calendar.current.component(.year, from: Date())
-
-    private var fiscalYearStartMonth: Int {
-        let configuredMonth = appSettings.first?.fiscalYearStartMonth ?? 4
-        return min(max(configuredMonth, 1), 12)
-    }
-
-    private var selectedPeriodTitle: String {
-        switch viewMode {
-        case .calendarYear:
-            "\(selectedPeriod)年"
-        case .fiscalYear:
-            "\(selectedPeriod)年度"
-        }
+    private var selectedYearTitle: String {
+        "\(selectedYear)年"
     }
 
     private var selectedRecords: [PayRecord] {
-        payRecords.filter {
-            periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth) == selectedPeriod
-        }
+        payRecords.filter { $0.paymentYear == selectedYear }
     }
 
     private var annualSummaries: [AnalysisPeriodSummary] {
-        let latestPeriod = max(selectedPeriod, payRecords.map {
-            periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth)
-        }.max() ?? selectedPeriod)
+        let latestYear = max(selectedYear, payRecords.map(\.paymentYear).max() ?? selectedYear)
 
         return (0..<5).reversed().map { offset in
-            let period = latestPeriod - offset
-            let records = payRecords.filter {
-                periodKey(for: $0, viewMode: viewMode, fiscalYearStartMonth: fiscalYearStartMonth) == period
-            }
-            return AnalysisPeriodSummary(
-                period: period,
-                label: periodLabel(for: period),
-                records: records
-            )
+            let year = latestYear - offset
+            let records = payRecords.filter { $0.paymentYear == year }
+            return AnalysisPeriodSummary(period: year, label: "\(year)年", records: records)
         }
     }
 
     private var annualStackItems: [StackedAmountItem] {
         annualSummaries.flatMap { summary in
             [
-                StackedAmountItem(
-                    id: "\(summary.period)-net",
-                    label: summary.label,
-                    kind: .net,
-                    amount: summary.netTotal
-                ),
-                StackedAmountItem(
-                    id: "\(summary.period)-deduction",
-                    label: summary.label,
-                    kind: .deduction,
-                    amount: summary.deductionTotal
-                )
+                StackedAmountItem(id: "\(summary.period)-net", label: summary.label, kind: .net, amount: summary.netTotal),
+                StackedAmountItem(id: "\(summary.period)-deduction", label: summary.label, kind: .deduction, amount: summary.deductionTotal)
             ]
         }
     }
 
     private var monthlySummaries: [AnalysisMonthSummary] {
-        orderedMonths.map { month in
+        (1...12).map { month in
             let records = selectedRecords.filter { $0.paymentMonth == month }
             return AnalysisMonthSummary(month: month, label: "\(month)月", records: records)
-        }
-    }
-
-    private var monthlyChartItems: [GroupedAmountItem] {
-        monthlySummaries.flatMap { summary in
-            [
-                GroupedAmountItem(
-                    id: "\(summary.month)-gross",
-                    label: summary.label,
-                    kind: .gross,
-                    amount: summary.grossTotal
-                ),
-                GroupedAmountItem(
-                    id: "\(summary.month)-net",
-                    label: summary.label,
-                    kind: .net,
-                    amount: summary.netTotal
-                ),
-                GroupedAmountItem(
-                    id: "\(summary.month)-deduction",
-                    label: summary.label,
-                    kind: .deduction,
-                    amount: summary.deductionTotal
-                )
-            ]
         }
     }
 
@@ -132,61 +75,35 @@ struct AnalysisView: View {
         }
     }
 
-    private var orderedMonths: [Int] {
-        switch viewMode {
-        case .calendarYear:
-            return Array(1...12)
-        case .fiscalYear:
-            return Array(fiscalYearStartMonth...12) + Array(1..<fiscalYearStartMonth)
-        }
-    }
-
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Picker("表示方法", selection: $viewMode) {
-                    ForEach(ViewMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: viewMode) { _, newMode in
-                    selectedPeriod = currentPeriod(for: newMode)
-                }
-
-                periodSelector
+            VStack(alignment: .leading, spacing: 18) {
+                yearSelector
 
                 if payRecords.isEmpty {
                     emptyState
                 } else {
-                    annualTrendSection
-                    monthlyTrendSection
+                    trendSection
                     breakdownSection
                 }
             }
             .padding()
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("分析")
     }
 
-    private var periodSelector: some View {
-        Stepper(value: $selectedPeriod, in: 2000...2100) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(selectedPeriodTitle)
-                    .font(.title2.weight(.semibold))
-                Text(periodDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    private var yearSelector: some View {
+        analysisCard(tint: .teal) {
+            Stepper(value: $selectedYear, in: 2000...2100) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: "\(selectedYear)年")
+                        .font(.title3.weight(.semibold))
+                    Text("年別で収入の推移と内訳を確認します")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-        }
-    }
-
-    private var periodDescription: String {
-        switch viewMode {
-        case .calendarYear:
-            "1月〜12月"
-        case .fiscalYear:
-            fiscalYearStartMonth == 1 ? "1月〜12月" : "\(fiscalYearStartMonth)月〜翌\(fiscalYearStartMonth - 1)月"
         }
     }
 
@@ -194,30 +111,106 @@ struct AnalysisView: View {
         ContentUnavailableView(
             "分析できる明細がありません",
             systemImage: "chart.bar.xaxis",
-            description: Text("給与明細を登録すると、年次推移、月別推移、勤務先別・収入区分別の内訳を確認できます。")
+            description: Text("給与明細を登録すると、月別推移、年次推移、勤務先別・収入区分別の内訳を確認できます。")
         )
         .frame(minHeight: 260)
     }
 
-    private var annualTrendSection: some View {
-        analysisCard {
+    private var trendSection: some View {
+        analysisCard(tint: .blue) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
-                    title: "年次推移",
-                    subtitle: "手取り + 控除 = 額面として直近5期間を比較"
+                    title: "推移",
+                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "直近5年の手取り・控除"
                 )
 
-                Chart(annualStackItems) { item in
-                    BarMark(
-                        x: .value("期間", item.label),
-                        y: .value("金額", item.amount)
-                    )
-                    .foregroundStyle(by: .value("区分", item.kind.label))
+                Picker("推移", selection: $trendScope) {
+                    ForEach(AnalysisTrendScope.allCases) { scope in
+                        Text(scope.label).tag(scope)
+                    }
                 }
-                .chartForegroundStyleScale([
-                    AmountKind.net.label: .green,
-                    AmountKind.deduction.label: .orange
-                ])
+                .pickerStyle(.segmented)
+
+                switch trendScope {
+                case .monthly:
+                    monthlyTrendContent
+                case .annual:
+                    annualTrendContent
+                }
+            }
+        }
+    }
+
+    private var annualTrendContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Chart(annualStackItems) { item in
+                BarMark(
+                    x: .value("年", item.label),
+                    y: .value("金額", item.amount)
+                )
+                .foregroundStyle(by: .value("区分", item.kind.label))
+                .cornerRadius(4)
+            }
+            .chartForegroundStyleScale([
+                AmountKind.net.label: .green,
+                AmountKind.deduction.label: .orange
+            ])
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let amount = value.as(Int.self) {
+                            Text(shortYenText(amount))
+                        }
+                    }
+                }
+            }
+            .frame(height: 180)
+
+            VStack(spacing: 0) {
+                ForEach(annualSummaries) { summary in
+                    PeriodSummaryRow(summary: summary)
+
+                    if summary.id != annualSummaries.last?.id {
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    private var monthlyTrendContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if selectedRecords.isEmpty {
+                Text("この年の明細はまだありません。年を切り替えるか、明細を追加してください。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 24)
+            } else {
+                Chart {
+                    ForEach(monthlySummaries) { summary in
+                        BarMark(
+                            x: .value("月", summary.label),
+                            y: .value("額面", summary.grossTotal)
+                        )
+                        .foregroundStyle(.teal.gradient)
+                        .cornerRadius(4)
+
+                        LineMark(
+                            x: .value("月", summary.label),
+                            y: .value("手取り", summary.netTotal)
+                        )
+                        .foregroundStyle(.blue)
+                        .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                        PointMark(
+                            x: .value("月", summary.label),
+                            y: .value("手取り", summary.netTotal)
+                        )
+                        .foregroundStyle(.blue)
+                    }
+                }
                 .chartYAxis {
                     AxisMarks { value in
                         AxisGridLine()
@@ -228,13 +221,20 @@ struct AnalysisView: View {
                         }
                     }
                 }
-                .frame(height: 240)
+                .frame(height: 220)
+
+                HStack(spacing: 12) {
+                    LegendDot(color: .teal, text: "額面")
+                    LegendDot(color: .blue, text: "手取り")
+                    LegendDot(color: .orange, text: "控除は下の月別一覧で確認")
+                }
+                .font(.caption)
 
                 VStack(spacing: 0) {
-                    ForEach(annualSummaries) { summary in
-                        PeriodSummaryRow(summary: summary)
+                    ForEach(monthlySummaries.filter { !$0.records.isEmpty }) { summary in
+                        MonthSummaryRow(summary: summary)
 
-                        if summary.id != annualSummaries.last?.id {
+                        if summary.id != monthlySummaries.filter({ !$0.records.isEmpty }).last?.id {
                             Divider()
                         }
                     }
@@ -243,55 +243,11 @@ struct AnalysisView: View {
         }
     }
 
-    private var monthlyTrendSection: some View {
-        analysisCard {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
-                    title: "月別推移",
-                    subtitle: "\(selectedPeriodTitle)の額面・手取り・控除"
-                )
-
-                if selectedRecords.isEmpty {
-                    Text("この期間の明細はまだありません。期間を切り替えるか、明細を追加してください。")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 24)
-                } else {
-                    Chart(monthlyChartItems) { item in
-                        BarMark(
-                            x: .value("月", item.label),
-                            y: .value("金額", item.amount)
-                        )
-                        .foregroundStyle(by: .value("区分", item.kind.label))
-                        .position(by: .value("区分", item.kind.label))
-                    }
-                    .chartForegroundStyleScale([
-                        AmountKind.gross.label: .blue,
-                        AmountKind.net.label: .green,
-                        AmountKind.deduction.label: .orange
-                    ])
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisGridLine()
-                            AxisValueLabel {
-                                if let amount = value.as(Int.self) {
-                                    Text(shortYenText(amount))
-                                }
-                            }
-                        }
-                    }
-                    .frame(height: 260)
-                }
-            }
-        }
-    }
-
     private var breakdownSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 18) {
             sectionHeader(
                 title: "内訳分析",
-                subtitle: "\(selectedPeriodTitle)の勤務先別・収入区分別の比較"
+                subtitle: "\(selectedYearTitle)の勤務先別・収入区分別"
             )
             employerBreakdownSection
             incomeCategoryBreakdownSection
@@ -299,32 +255,24 @@ struct AnalysisView: View {
     }
 
     private var employerBreakdownSection: some View {
-        analysisCard {
+        analysisCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
-                    title: "勤務先別",
-                    subtitle: "\(selectedPeriodTitle)の勤務先ごとの収入"
-                )
-
+                sectionHeader(title: "勤務先別", subtitle: "勤務先ごとの額面・手取り")
                 breakdownContent(
                     summaries: employerSummaries,
-                    emptyMessage: "この期間の勤務先別データはまだありません。"
+                    emptyMessage: "この年の勤務先別データはまだありません。"
                 )
             }
         }
     }
 
     private var incomeCategoryBreakdownSection: some View {
-        analysisCard {
+        analysisCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
-                    title: "収入区分別",
-                    subtitle: "\(selectedPeriodTitle)の収入区分ごとの内訳"
-                )
-
+                sectionHeader(title: "収入区分別", subtitle: "常勤、外勤、当直、賞与などの比較")
                 breakdownContent(
                     summaries: incomeCategorySummaries,
-                    emptyMessage: "この期間の収入区分別データはまだありません。"
+                    emptyMessage: "この年の収入区分別データはまだありません。"
                 )
             }
         }
@@ -344,7 +292,8 @@ struct AnalysisView: View {
                         x: .value("額面", summary.grossTotal),
                         y: .value("項目", summary.label)
                     )
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.teal.gradient)
+                    .cornerRadius(4)
                     .annotation(position: .trailing) {
                         Text(shortYenText(summary.grossTotal))
                             .font(.caption2)
@@ -361,7 +310,7 @@ struct AnalysisView: View {
                         }
                     }
                 }
-                .frame(height: max(180, CGFloat(min(summaries.count, 8)) * 36))
+                .frame(height: max(170, CGFloat(min(summaries.count, 8)) * 34))
 
                 VStack(spacing: 0) {
                     ForEach(summaries) { summary in
@@ -376,15 +325,20 @@ struct AnalysisView: View {
         }
     }
 
-    private func analysisCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func analysisCard<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
         content()
             .padding()
-            .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
+            .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(.quaternary)
+                    .fill(.background)
+                    .shadow(color: tint.opacity(0.10), radius: 10, y: 4)
             )
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(tint.gradient)
+                    .frame(width: 4)
+                    .padding(.vertical, 14)
+            }
     }
 
     private func sectionHeader(title: String, subtitle: String) -> some View {
@@ -396,36 +350,18 @@ struct AnalysisView: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
 
-    private func currentPeriod(for mode: ViewMode) -> Int {
-        let now = Date()
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: now)
-        let month = calendar.component(.month, from: now)
+private enum AnalysisTrendScope: String, CaseIterable, Identifiable {
+    case monthly
+    case annual
 
-        switch mode {
-        case .calendarYear:
-            return year
-        case .fiscalYear:
-            return month >= fiscalYearStartMonth ? year : year - 1
-        }
-    }
+    var id: String { rawValue }
 
-    private func periodKey(for record: PayRecord, viewMode: ViewMode, fiscalYearStartMonth: Int) -> Int {
-        switch viewMode {
-        case .calendarYear:
-            return record.paymentYear
-        case .fiscalYear:
-            return record.paymentMonth >= fiscalYearStartMonth ? record.paymentYear : record.paymentYear - 1
-        }
-    }
-
-    private func periodLabel(for period: Int) -> String {
-        switch viewMode {
-        case .calendarYear:
-            return "\(period)年"
-        case .fiscalYear:
-            return "\(period)年度"
+    var label: String {
+        switch self {
+        case .monthly: "月別"
+        case .annual: "年次"
         }
     }
 }
@@ -435,29 +371,14 @@ private struct AnalysisPeriodSummary: Identifiable {
     let label: String
     let records: [PayRecord]
 
-    var id: Int {
-        period
-    }
-
-    var grossTotal: Int {
-        records.reduce(0) { $0 + $1.grossAmount }
-    }
-
-    var netTotal: Int {
-        records.reduce(0) { $0 + $1.netAmount }
-    }
-
-    var deductionTotal: Int {
-        records.reduce(0) { $0 + deductionAmount(for: $1) }
-    }
+    var id: Int { period }
+    var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
 
     var takeHomeRateText: String {
-        guard grossTotal > 0 else {
-            return "-"
-        }
-
-        let rate = Double(netTotal) / Double(grossTotal) * 100
-        return String(format: "%.1f%%", rate)
+        guard grossTotal > 0 else { return "-" }
+        return String(format: "%.1f%%", Double(netTotal) / Double(grossTotal) * 100)
     }
 }
 
@@ -466,42 +387,20 @@ private struct AnalysisMonthSummary: Identifiable {
     let label: String
     let records: [PayRecord]
 
-    var id: Int {
-        month
-    }
-
-    var grossTotal: Int {
-        records.reduce(0) { $0 + $1.grossAmount }
-    }
-
-    var netTotal: Int {
-        records.reduce(0) { $0 + $1.netAmount }
-    }
-
-    var deductionTotal: Int {
-        records.reduce(0) { $0 + deductionAmount(for: $1) }
-    }
+    var id: Int { month }
+    var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
 }
 
 private struct BreakdownSummary: Identifiable {
     let label: String
     let records: [PayRecord]
 
-    var id: String {
-        label
-    }
-
-    var grossTotal: Int {
-        records.reduce(0) { $0 + $1.grossAmount }
-    }
-
-    var netTotal: Int {
-        records.reduce(0) { $0 + $1.netAmount }
-    }
-
-    var count: Int {
-        records.count
-    }
+    var id: String { label }
+    var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
+    var count: Int { records.count }
 }
 
 private struct StackedAmountItem: Identifiable {
@@ -511,26 +410,14 @@ private struct StackedAmountItem: Identifiable {
     let amount: Int
 }
 
-private struct GroupedAmountItem: Identifiable {
-    let id: String
-    let label: String
-    let kind: AmountKind
-    let amount: Int
-}
-
 private enum AmountKind {
-    case gross
     case net
     case deduction
 
     var label: String {
         switch self {
-        case .gross:
-            "額面"
-        case .net:
-            "手取り"
-        case .deduction:
-            "控除"
+        case .net: "手取り"
+        case .deduction: "控除"
         }
     }
 }
@@ -545,35 +432,23 @@ private enum IncomeCategoryAnalysisGroup: CaseIterable {
 
     var label: String {
         switch self {
-        case .fullTimeSalary:
-            "常勤給与"
-        case .partTimeSalary:
-            "外勤"
-        case .duty:
-            "当直・日当直"
-        case .spot:
-            "スポット"
-        case .bonus:
-            "賞与"
-        case .other:
-            "その他"
+        case .fullTimeSalary: "常勤給与"
+        case .partTimeSalary: "外勤"
+        case .duty: "当直・日当直"
+        case .spot: "スポット"
+        case .bonus: "賞与"
+        case .other: "その他"
         }
     }
 
     var categories: [IncomeCategory] {
         switch self {
-        case .fullTimeSalary:
-            [.fullTimeSalary]
-        case .partTimeSalary:
-            [.partTimeSalary]
-        case .duty:
-            [.nightDuty, .dayNightDuty]
-        case .spot:
-            [.spot]
-        case .bonus:
-            [.bonus]
-        case .other:
-            [.other]
+        case .fullTimeSalary: [.fullTimeSalary]
+        case .partTimeSalary: [.partTimeSalary]
+        case .duty: [.nightDuty, .dayNightDuty]
+        case .spot: [.spot]
+        case .bonus: [.bonus]
+        case .other: [.other]
         }
     }
 }
@@ -600,7 +475,7 @@ private struct PeriodSummaryRow: View {
                 amountText("控除", summary.deductionTotal)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 
     private func amountText(_ title: String, _ amount: Int) -> some View {
@@ -609,6 +484,36 @@ private struct PeriodSummaryRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(yenText(amount))
+                .font(.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+    }
+}
+
+private struct MonthSummaryRow: View {
+    let summary: AnalysisMonthSummary
+
+    var body: some View {
+        HStack {
+            Text(summary.label)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 42, alignment: .leading)
+            amountText("額面", summary.grossTotal)
+            Spacer()
+            amountText("手取り", summary.netTotal)
+            Spacer()
+            amountText("控除", summary.deductionTotal)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func amountText(_ title: String, _ amount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(shortYenText(amount))
                 .font(.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -637,7 +542,7 @@ private struct BreakdownRow: View {
                 amountText("手取り", summary.netTotal)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 
     private func amountText(_ title: String, _ amount: Int) -> some View {
@@ -649,6 +554,21 @@ private struct BreakdownRow: View {
                 .font(.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
+        }
+    }
+}
+
+private struct LegendDot: View {
+    let color: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(text)
+                .foregroundStyle(.secondary)
         }
     }
 }

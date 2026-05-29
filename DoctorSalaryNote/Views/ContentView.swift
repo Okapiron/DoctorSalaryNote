@@ -84,6 +84,7 @@ struct ContentView: View {
                 Label("分析", systemImage: "chart.bar")
             }
         }
+        .tint(.teal)
     }
 
     private func authenticate() {
