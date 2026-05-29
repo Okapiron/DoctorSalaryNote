@@ -105,31 +105,38 @@ struct DocumentListView: View {
                         Button {
                             selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
                         } label: {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text(summary.employerName)
                                         .font(.headline)
                                         .foregroundStyle(.primary)
+                                        .lineLimit(1)
                                     Spacer()
                                     Text("\(summary.totalDocumentCount)件")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.secondary)
                                 }
 
-                                Label("給与・賞与明細 \(summary.payslipDocumentCount)件 / 登録明細 \(summary.payRecordCount)件", systemImage: "doc.plaintext")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                HStack {
-                                    statusText("源泉徴収票", summary.withholdingStatus)
-                                    Spacer()
-                                    statusText("支払調書", summary.paymentStatementStatus)
+                                HStack(spacing: 10) {
+                                    documentStatusPill("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
+                                    documentStatusPill("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.color)
                                 }
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(selectedSummaryID == summary.id ? Color.cyan.opacity(0.12) : Color(.secondarySystemGroupedBackground))
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(selectedSummaryID == summary.id ? Color.cyan.opacity(0.45) : Color.black.opacity(0.04), lineWidth: 1)
                             }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(selectedSummaryID == summary.id ? Color.cyan.opacity(0.08) : Color.clear)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .listRowBackground(Color.clear)
 
                         if summary.withholdingStatus == .missing, let employer = summary.employer {
                             VStack(alignment: .leading) {
@@ -146,7 +153,9 @@ struct DocumentListView: View {
                                 .buttonStyle(.borderless)
                                 .tint(.teal)
                             }
-                            .padding(.top, -4)
+                            .padding(.top, -6)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 30, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
                         }
                     }
                 }
@@ -205,23 +214,25 @@ struct DocumentListView: View {
         }
     }
 
-    private func statusText(_ title: String, _ status: DocumentStatus) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func documentStatusPill(_ title: String, _ value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(status.label)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(status.color)
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(Color(.systemBackground).opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func makeSummary(for employer: Employer?) -> DocumentWorkplaceSummary {
         let records = yearPayRecords.filter { $0.employer?.persistentModelID == employer?.persistentModelID }
         let employerDocuments = yearDocuments.filter { $0.employer?.persistentModelID == employer?.persistentModelID }
-        let payslipDocumentCount = employerDocuments.filter {
-            $0.documentType == .payslip || $0.documentType == .bonusPayslip
-        }.count
         let hasWithholdingSlip = employerDocuments.contains { $0.documentType == .withholdingSlip }
         let hasPaymentStatement = employerDocuments.contains { $0.documentType == .paymentStatement }
 
@@ -231,7 +242,6 @@ struct DocumentListView: View {
             employerName: employer?.name ?? "勤務先未設定",
             payRecordCount: records.count,
             totalDocumentCount: employerDocuments.count,
-            payslipDocumentCount: payslipDocumentCount,
             withholdingStatus: hasWithholdingSlip ? .registered : (records.isEmpty ? .none : .missing),
             paymentStatementStatus: hasPaymentStatement ? .registered : .none
         )
@@ -258,7 +268,6 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let employerName: String
     let payRecordCount: Int
     let totalDocumentCount: Int
-    let payslipDocumentCount: Int
     let withholdingStatus: DocumentStatus
     let paymentStatementStatus: DocumentStatus
 }
@@ -280,6 +289,13 @@ private enum DocumentStatus: Equatable {
         case .registered: "登録済み"
         case .missing: "未登録"
         case .none: "なし"
+        }
+    }
+
+    var paymentStatementLabel: String {
+        switch self {
+        case .registered: "あり"
+        case .missing, .none: "なし"
         }
     }
 
