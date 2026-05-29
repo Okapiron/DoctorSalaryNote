@@ -20,6 +20,10 @@ struct AnalysisView: View {
         payRecords.filter { $0.paymentYear == selectedYear }
     }
 
+    private var selectedYearGrossTotal: Int {
+        selectedRecords.reduce(0) { $0 + $1.grossAmount }
+    }
+
     private var annualSummaries: [AnalysisPeriodSummary] {
         let latestYear = max(selectedYear, payRecords.map(\.paymentYear).max() ?? selectedYear)
 
@@ -223,7 +227,7 @@ struct AnalysisView: View {
 
     private func breakdownContent(summaries: [BreakdownSummary], emptyMessage: String) -> some View {
         let visibleSummaries = Array(summaries.prefix(8))
-        let maxGross = max(visibleSummaries.map(\.grossTotal).max() ?? 0, 1)
+        let yearlyGrossTotal = max(selectedYearGrossTotal, 1)
 
         return VStack(alignment: .leading, spacing: 12) {
             if summaries.isEmpty {
@@ -238,10 +242,12 @@ struct AnalysisView: View {
                         InfographicBreakdownRow(
                             rank: index + 1,
                             summary: summary,
-                            maxGross: maxGross
+                            yearlyGrossTotal: yearlyGrossTotal
                         )
                     }
                 }
+
+                ScaleGuideRow(total: selectedYearGrossTotal)
 
                 HStack(spacing: 12) {
                     LegendDot(color: .cyan, text: "額面")
@@ -283,7 +289,10 @@ struct AnalysisView: View {
     }
 
     private func trendInfographicChart(points: [TrendPoint]) -> some View {
-        Chart {
+        let maxAmount = max(points.map(\.grossTotal).max() ?? 0, points.map(\.netTotal).max() ?? 0)
+        let axisMax = niceAxisMax(for: maxAmount)
+
+        return Chart {
             ForEach(points) { point in
                 BarMark(
                     x: .value("期間", point.label),
@@ -317,9 +326,27 @@ struct AnalysisView: View {
                 .symbolSize(52)
             }
         }
-        .chartYAxis(.hidden)
+        .chartYScale(domain: 0...axisMax)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
+                    .foregroundStyle(Color(.systemGray4))
+                AxisTick()
+                    .foregroundStyle(Color(.systemGray4))
+                AxisValueLabel {
+                    if let amount = value.as(Int.self) {
+                        Text(shortYenText(amount))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
         .chartXAxis {
             AxisMarks { _ in
+                AxisTick()
+                    .foregroundStyle(Color(.systemGray4))
                 AxisValueLabel()
                     .foregroundStyle(.secondary)
             }
@@ -583,16 +610,22 @@ private struct BreakdownRow: View {
 private struct InfographicBreakdownRow: View {
     let rank: Int
     let summary: BreakdownSummary
-    let maxGross: Int
+    let yearlyGrossTotal: Int
 
     private var grossRatio: Double {
-        guard maxGross > 0 else { return 0 }
-        return min(Double(summary.grossTotal) / Double(maxGross), 1)
+        guard yearlyGrossTotal > 0 else { return 0 }
+        return min(Double(summary.grossTotal) / Double(yearlyGrossTotal), 1)
     }
 
     private var netRatio: Double {
-        guard maxGross > 0 else { return 0 }
-        return min(Double(summary.netTotal) / Double(maxGross), 1)
+        guard yearlyGrossTotal > 0 else { return 0 }
+        return min(Double(summary.netTotal) / Double(yearlyGrossTotal), 1)
+    }
+
+    private var shareText: String {
+        guard yearlyGrossTotal > 0 else { return "0%" }
+        let share = Double(summary.grossTotal) / Double(yearlyGrossTotal) * 100
+        return String(format: "%.1f%%", share)
     }
 
     var body: some View {
@@ -609,10 +642,15 @@ private struct InfographicBreakdownRow: View {
 
                 Spacer()
 
-                Text(shortYenText(summary.grossTotal))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(shortYenText(summary.grossTotal))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(shareText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .monospacedDigit()
             }
 
             GeometryReader { proxy in
@@ -659,6 +697,37 @@ private struct InfographicBreakdownRow: View {
     }
 }
 
+private struct ScaleGuideRow: View {
+    let total: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                scaleText("0%")
+                Spacer()
+                scaleText("50%")
+                Spacer()
+                scaleText("100%")
+            }
+
+            HStack {
+                Text("右端 = \(shortYenText(total))")
+                Spacer()
+                Text("選択年の給与総額")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .monospacedDigit()
+    }
+
+    private func scaleText(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+    }
+}
+
 private struct LegendDot: View {
     let color: Color
     let text: String
@@ -690,4 +759,26 @@ private func shortYenText(_ amount: Int) -> String {
         return String(format: "%.1f万円", value)
     }
     return yenText(amount)
+}
+
+private func niceAxisMax(for amount: Int) -> Int {
+    guard amount > 0 else {
+        return 100_000
+    }
+
+    let magnitude = pow(10.0, floor(log10(Double(amount))))
+    let normalized = Double(amount) / magnitude
+    let niceNormalized: Double
+
+    if normalized <= 1.0 {
+        niceNormalized = 1.0
+    } else if normalized <= 2.0 {
+        niceNormalized = 2.0
+    } else if normalized <= 5.0 {
+        niceNormalized = 5.0
+    } else {
+        niceNormalized = 10.0
+    }
+
+    return Int(niceNormalized * magnitude)
 }
