@@ -63,13 +63,13 @@ struct DocumentListView: View {
             return makeSummary(for: employer)
         }
         .sorted { lhs, rhs in
-            if lhs.totalDocumentCount == rhs.totalDocumentCount {
-                if lhs.payRecordCount == rhs.payRecordCount {
+            if lhs.grossTotal == rhs.grossTotal {
+                if lhs.totalDocumentCount == rhs.totalDocumentCount {
                     return lhs.employerName.localizedStandardCompare(rhs.employerName) == .orderedAscending
                 }
-                return lhs.payRecordCount > rhs.payRecordCount
+                return lhs.totalDocumentCount > rhs.totalDocumentCount
             }
-            return lhs.totalDocumentCount > rhs.totalDocumentCount
+            return lhs.grossTotal > rhs.grossTotal
         }
 
         if yearDocuments.contains(where: { $0.employer == nil }) {
@@ -102,53 +102,36 @@ struct DocumentListView: View {
                     )
                 } else {
                     ForEach(workplaceSummaries) { summary in
-                        Button {
-                            selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text(summary.employerName)
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    if selectedSummaryID == summary.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.cyan)
-                                            .accessibilityLabel("絞り込み中")
-                                    }
-                                    Text("\(summary.totalDocumentCount)件")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(summary.employerName)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Spacer()
+                                if selectedSummaryID == summary.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.cyan)
+                                        .accessibilityLabel("絞り込み中")
                                 }
-
-                                HStack(spacing: 18) {
-                                    documentStatusText("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
-                                    documentStatusText("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.color)
-                                }
+                                Text("\(summary.totalDocumentCount)件")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
+
+                            HStack(spacing: 18) {
+                                documentStatusText("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
+                                documentStatusText("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.paymentStatementColor)
+                            }
                         }
-                        .buttonStyle(.plain)
-
-                        if summary.withholdingStatus == .missing, let employer = summary.employer {
-                            VStack(alignment: .leading) {
-                                Button {
-                                    documentDraft = DocumentDraft(
-                                        documentType: .withholdingSlip,
-                                        year: selectedYear,
-                                        employer: employer
-                                    )
-                                } label: {
-                                    Label("源泉徴収票を登録", systemImage: "plus.circle")
-                                }
-                                .font(.subheadline.weight(.semibold))
-                                .buttonStyle(.borderless)
-                                .tint(.teal)
-                            }
-                            .padding(.top, -6)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
+                        }
+                        .onLongPressGesture {
+                            openWithholdingSlipForm(for: summary)
                         }
                     }
                 }
@@ -224,6 +207,7 @@ struct DocumentListView: View {
         let employerDocuments = yearDocuments.filter { $0.employer?.persistentModelID == employer?.persistentModelID }
         let hasWithholdingSlip = employerDocuments.contains { $0.documentType == .withholdingSlip }
         let hasPaymentStatement = employerDocuments.contains { $0.documentType == .paymentStatement }
+        let grossTotal = records.reduce(0) { $0 + $1.grossAmount }
 
         return DocumentWorkplaceSummary(
             id: summaryID(for: employer),
@@ -231,8 +215,21 @@ struct DocumentListView: View {
             employerName: employer?.name ?? "勤務先未設定",
             payRecordCount: records.count,
             totalDocumentCount: employerDocuments.count,
+            grossTotal: grossTotal,
             withholdingStatus: hasWithholdingSlip ? .registered : (records.isEmpty ? .none : .missing),
             paymentStatementStatus: hasPaymentStatement ? .registered : .none
+        )
+    }
+
+    private func openWithholdingSlipForm(for summary: DocumentWorkplaceSummary) {
+        guard let employer = summary.employer else {
+            return
+        }
+
+        documentDraft = DocumentDraft(
+            documentType: .withholdingSlip,
+            year: selectedYear,
+            employer: employer
         )
     }
 
@@ -257,6 +254,7 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let employerName: String
     let payRecordCount: Int
     let totalDocumentCount: Int
+    let grossTotal: Int
     let withholdingStatus: DocumentStatus
     let paymentStatementStatus: DocumentStatus
 }
@@ -293,6 +291,13 @@ private enum DocumentStatus: Equatable {
         case .registered: .green
         case .missing: .orange
         case .none: .secondary
+        }
+    }
+
+    var paymentStatementColor: Color {
+        switch self {
+        case .registered: .green
+        case .missing, .none: .orange
         }
     }
 }
