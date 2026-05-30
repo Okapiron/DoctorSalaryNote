@@ -18,6 +18,7 @@ struct PayRecordListView: View {
     @State private var payRecordPage = 0
     @State private var payRecordsPendingDeletion: [PayRecord] = []
     @State private var isShowingPayRecordDeleteConfirmation = false
+    @State private var deletionErrorMessage: String?
 
     private let payRecordsPerPage = 20
 
@@ -194,6 +195,16 @@ struct PayRecordListView: View {
             } message: {
                 Text("紐づく書類と保存済みファイルも一緒に削除されます。この操作は元に戻せません。")
             }
+            .alert("削除できませんでした", isPresented: Binding(
+                get: { deletionErrorMessage != nil },
+                set: { if !$0 { deletionErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {
+                    deletionErrorMessage = nil
+                }
+            } message: {
+                Text(deletionErrorMessage ?? "もう一度お試しください。")
+            }
         }
     }
 
@@ -209,16 +220,24 @@ struct PayRecordListView: View {
     }
 
     private func deletePayRecordsAndLinkedDocuments(_ records: [PayRecord]) {
+        let documentsToDelete = records.flatMap { linkedDocuments(for: $0) }
+        let fileURLs = documentsToDelete.compactMap { DocumentFileStore.fileURL(for: $0) }
+
         for record in records {
-            for document in linkedDocuments(for: record) {
-                DocumentFileStore.deleteFile(for: document)
+            for document in documentsToDelete.filter({ $0.payRecord?.persistentModelID == record.persistentModelID }) {
                 modelContext.delete(document)
             }
             modelContext.delete(record)
         }
 
-        try? modelContext.save()
-        clampPayRecordPage()
+        do {
+            try modelContext.save()
+            fileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
+            clampPayRecordPage()
+        } catch {
+            modelContext.rollback()
+            deletionErrorMessage = "給与明細を削除できませんでした。データを確認して、もう一度お試しください。"
+        }
     }
 
     private var pageControl: some View {

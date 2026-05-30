@@ -23,6 +23,7 @@ struct DocumentListView: View {
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingDocument = false
     @State private var selectedSummaryID: Int?
+    @State private var deletionErrorMessage: String?
 
     private var yearPayRecords: [PayRecord] {
         payRecords.filter { $0.paymentYear == selectedYear }
@@ -175,6 +176,16 @@ struct DocumentListView: View {
                 DocumentFormView(initialYear: selectedYear)
             }
         }
+        .alert("削除できませんでした", isPresented: Binding(
+            get: { deletionErrorMessage != nil },
+            set: { if !$0 { deletionErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                deletionErrorMessage = nil
+            }
+        } message: {
+            Text(deletionErrorMessage ?? "もう一度お試しください。")
+        }
     }
 
     private func documentStatusText(_ title: String, _ value: String, color: Color) -> some View {
@@ -213,13 +224,20 @@ struct DocumentListView: View {
     }
 
     private func deleteDocuments(at offsets: IndexSet) {
-        for index in offsets {
-            let document = filteredYearDocuments[index]
-            DocumentFileStore.deleteFile(for: document)
+        let targets = offsets.map { filteredYearDocuments[$0] }
+        let fileURLs = targets.compactMap { DocumentFileStore.fileURL(for: $0) }
+
+        for document in targets {
             modelContext.delete(document)
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            fileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
+        } catch {
+            modelContext.rollback()
+            deletionErrorMessage = "書類を削除できませんでした。データを確認して、もう一度お試しください。"
+        }
     }
 }
 

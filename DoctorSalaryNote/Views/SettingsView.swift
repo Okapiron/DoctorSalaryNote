@@ -258,12 +258,11 @@ struct SettingsView: View {
     }
 
     private func deleteAllData() {
+        let documentFileURLs = documents.compactMap { DocumentFileStore.fileURL(for: $0) }
+
         for document in documents {
-            DocumentFileStore.deleteFile(for: document)
             modelContext.delete(document)
         }
-
-        DocumentFileStore.deleteAllFiles()
 
         for payRecord in payRecords {
             modelContext.delete(payRecord)
@@ -278,16 +277,19 @@ struct SettingsView: View {
         }
 
         modelContext.insert(AppSettings())
-        UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
 
         do {
             try modelContext.save()
+            UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
+            documentFileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
+            DocumentFileStore.deleteAllFiles()
             selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil
             securityMessage = nil
             deleteMessage = "すべてのデータを削除しました。"
         } catch {
+            modelContext.rollback()
             deleteMessage = "データ削除中にエラーが発生しました。もう一度お試しください。"
         }
     }
