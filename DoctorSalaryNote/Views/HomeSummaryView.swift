@@ -58,8 +58,8 @@ struct HomeSummaryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                monthlyTrendSection
                 latestMonthSection
+                monthlyTrendSection
                 yearSummarySection
                 recentRecordsSection
             }
@@ -83,7 +83,8 @@ struct HomeSummaryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
                     title: "直近の月別給与",
-                    subtitle: "最近6か月の額面と手取り"
+                    subtitle: "最近6か月の額面と手取り",
+                    systemImage: "chart.bar.xaxis"
                 )
 
                 if payRecords.isEmpty {
@@ -140,7 +141,8 @@ struct HomeSummaryView: View {
             VStack(alignment: .leading, spacing: 14) {
                 sectionHeader(
                     title: "\(latestMonthSummary.longLabel)の給与",
-                    subtitle: latestMonthSummary.records.isEmpty ? "この月の給与明細はまだありません" : "\(latestMonthSummary.records.count)件の給与明細"
+                    subtitle: latestMonthSummary.records.isEmpty ? "この月の給与明細はまだありません" : "\(latestMonthSummary.records.count)件の給与明細",
+                    systemImage: "calendar.badge.clock"
                 )
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -157,8 +159,11 @@ struct HomeSummaryView: View {
         homeCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
                 Stepper(value: $selectedYear, in: 2000...2100) {
-                    Text(verbatim: "\(selectedYear)年の合計")
-                        .font(.headline)
+                    HStack(spacing: 10) {
+                        headerIcon("calendar")
+                        Text(verbatim: "\(selectedYear)年の合計")
+                            .font(.headline)
+                    }
                 }
 
                 HStack(spacing: 12) {
@@ -202,7 +207,11 @@ struct HomeSummaryView: View {
     private var recentRecordsSection: some View {
         homeCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "最近の給与明細", subtitle: "登録した給与明細をすぐ確認")
+                sectionHeader(
+                    title: "最近の給与明細",
+                    subtitle: "登録した給与明細をすぐ確認",
+                    systemImage: "clock"
+                )
 
                 if recentRecords.isEmpty {
                     Text("給与明細を登録すると、直近3件がここに表示されます。")
@@ -245,14 +254,27 @@ struct HomeSummaryView: View {
             )
     }
 
-    private func sectionHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.headline)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private func sectionHeader(title: String, subtitle: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            headerIcon(systemImage)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private func headerIcon(_ systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.cyan)
+            .frame(width: 28, height: 28)
+            .background(Color.cyan.opacity(0.10))
+            .clipShape(Circle())
     }
 }
 
