@@ -211,19 +211,8 @@ struct SettingsView: View {
                 return
             }
 
-            Task {
-                do {
-                    try await BiometricAuthenticator.authenticate(reason: "医師給与ノートのロックを有効にするため認証してください。")
-                    await MainActor.run {
-                        updateBiometricLock(isEnabled: true)
-                        securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを有効にしました。"
-                    }
-                } catch {
-                    await MainActor.run {
-                        securityMessage = "認証できなかったため、ロックを有効にしませんでした。"
-                    }
-                }
-            }
+            updateBiometricLock(isEnabled: true)
+            securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを有効にしました。次回起動時、または1分以上アプリを離れた後に認証します。"
         } else {
             updateBiometricLock(isEnabled: false)
             securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを無効にしました。"

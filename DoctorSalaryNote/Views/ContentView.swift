@@ -7,17 +7,25 @@ struct ContentView: View {
     @AppStorage("biometricLockEnabled") private var storedBiometricLockEnabled = false
 
     @State private var isUnlocked = false
+    @State private var isPrivacyCovered = false
     @State private var authenticationMessage: String?
+    @State private var backgroundEnteredAt: Date?
+
+    private let biometricLockDelay: TimeInterval = 60
 
     private var isBiometricLockEnabled: Bool {
         appSettings.first?.isBiometricLockEnabled ?? storedBiometricLockEnabled
+    }
+
+    private var shouldShowLockedContent: Bool {
+        isBiometricLockEnabled && (!isUnlocked || isPrivacyCovered)
     }
 
     var body: some View {
         ZStack {
             mainTabs
 
-            if isBiometricLockEnabled && !isUnlocked {
+            if shouldShowLockedContent {
                 LockedContentView(
                     message: authenticationMessage,
                     authenticateAction: authenticate
@@ -36,21 +44,33 @@ struct ContentView: View {
             }
 
             if newPhase == .active {
-                if !isUnlocked {
+                let elapsed = backgroundEnteredAt.map { Date().timeIntervalSince($0) } ?? biometricLockDelay
+                backgroundEnteredAt = nil
+
+                if elapsed >= biometricLockDelay {
+                    isPrivacyCovered = false
+                    isUnlocked = false
                     authenticate()
+                } else {
+                    isPrivacyCovered = false
                 }
             } else if newPhase == .inactive || newPhase == .background {
-                isUnlocked = false
+                backgroundEnteredAt = Date()
+                isPrivacyCovered = true
                 authenticationMessage = nil
             }
         }
         .onChange(of: isBiometricLockEnabled) { _, isEnabled in
             storedBiometricLockEnabled = isEnabled
             if isEnabled {
-                isUnlocked = false
-                authenticate()
+                isUnlocked = true
+                isPrivacyCovered = false
+                backgroundEnteredAt = nil
+                authenticationMessage = nil
             } else {
                 isUnlocked = true
+                isPrivacyCovered = false
+                backgroundEnteredAt = nil
                 authenticationMessage = nil
             }
         }
@@ -101,11 +121,13 @@ struct ContentView: View {
                 try await BiometricAuthenticator.authenticate(reason: "医師給与ノートの内容を表示するため認証してください。")
                 await MainActor.run {
                     isUnlocked = true
+                    isPrivacyCovered = false
                     authenticationMessage = nil
                 }
             } catch {
                 await MainActor.run {
                     isUnlocked = false
+                    isPrivacyCovered = false
                     authenticationMessage = "認証できませんでした。給与情報を表示するには再度認証してください。"
                 }
             }

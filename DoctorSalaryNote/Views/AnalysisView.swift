@@ -11,6 +11,7 @@ struct AnalysisView: View {
 
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
     @State private var trendScope: AnalysisTrendScope = .monthly
+    @State private var pendingScrollTarget: AnalysisScrollTarget?
 
     private var selectedYearTitle: String {
         "\(selectedYear)年"
@@ -123,21 +124,38 @@ struct AnalysisView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                yearSelector
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    yearSelector
 
-                if payRecords.isEmpty {
-                    emptyState
-                } else {
-                    trendSection
-                    breakdownSection
+                    if payRecords.isEmpty {
+                        emptyState
+                    } else {
+                        trendSection
+                            .id(AnalysisScrollTarget.trend)
+                        breakdownSection
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("分析")
+            .onChange(of: pendingScrollTarget) { _, target in
+                guard let target else {
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        scrollProxy.scrollTo(target, anchor: .top)
+                    }
+                    pendingScrollTarget = nil
                 }
             }
-            .padding()
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("分析")
     }
 
     private var yearSelector: some View {
@@ -168,7 +186,8 @@ struct AnalysisView: View {
             VStack(alignment: .leading, spacing: 12) {
                 yearControlHeader(
                     title: "推移",
-                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "\(selectedYearTitle)までの5年推移"
+                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "\(selectedYearTitle)までの5年推移",
+                    scrollTarget: .trend
                 )
 
                 Picker("推移", selection: $trendScope) {
@@ -186,13 +205,13 @@ struct AnalysisView: View {
                 }
             }
         }
-        .simultaneousGesture(yearSwipeGesture)
+        .simultaneousGesture(yearSwipeGesture(keeping: .trend))
     }
 
     private var annualTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             trendDataChart(points: annualTrendPoints, axisMax: annualAxisMax)
-                .gesture(yearSwipeGesture)
+                .gesture(yearSwipeGesture(keeping: .trend))
 
             VStack(spacing: 0) {
                 ForEach(annualSummaries) { summary in
@@ -216,7 +235,7 @@ struct AnalysisView: View {
                     .padding(.vertical, 24)
             } else {
                 trendDataChart(points: monthlyTrendPoints, axisMax: monthlyAxisMax)
-                    .gesture(yearSwipeGesture)
+                    .gesture(yearSwipeGesture(keeping: .trend))
 
                 HStack {
                     Spacer()
@@ -258,27 +277,29 @@ struct AnalysisView: View {
     private var employerBreakdownSection: some View {
         analysisCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                yearControlHeader(title: "勤務先別", subtitle: "額面バーと手取り位置で比較")
+                yearControlHeader(title: "勤務先別", subtitle: "額面バーと手取り位置で比較", scrollTarget: .employer)
                 breakdownContent(
                     summaries: employerSummaries,
                     emptyMessage: "この年の勤務先別データはまだありません。"
                 )
             }
         }
-        .simultaneousGesture(yearSwipeGesture)
+        .id(AnalysisScrollTarget.employer)
+        .simultaneousGesture(yearSwipeGesture(keeping: .employer))
     }
 
     private var incomeCategoryBreakdownSection: some View {
         analysisCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                yearControlHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較")
+                yearControlHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較", scrollTarget: .incomeCategory)
                 breakdownContent(
                     summaries: incomeCategorySummaries,
                     emptyMessage: "この年の収入区分別データはまだありません。"
                 )
             }
         }
-        .simultaneousGesture(yearSwipeGesture)
+        .id(AnalysisScrollTarget.incomeCategory)
+        .simultaneousGesture(yearSwipeGesture(keeping: .incomeCategory))
     }
 
     private func breakdownContent(summaries: [BreakdownSummary], emptyMessage: String) -> some View {
@@ -342,7 +363,7 @@ struct AnalysisView: View {
         }
     }
 
-    private func yearControlHeader(title: String, subtitle: String) -> some View {
+    private func yearControlHeader(title: String, subtitle: String, scrollTarget: AnalysisScrollTarget) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
@@ -356,7 +377,7 @@ struct AnalysisView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    moveSelectedYear(by: -1)
+                    moveSelectedYear(by: -1, keeping: scrollTarget)
                 } label: {
                     Text("＜")
                         .font(.headline.weight(.semibold))
@@ -365,7 +386,7 @@ struct AnalysisView: View {
                 .accessibilityLabel("前年へ")
 
                 Button {
-                    moveSelectedYear(by: 1)
+                    moveSelectedYear(by: 1, keeping: scrollTarget)
                 } label: {
                     Text("＞")
                         .font(.headline.weight(.semibold))
@@ -377,7 +398,7 @@ struct AnalysisView: View {
         }
     }
 
-    private var yearSwipeGesture: some Gesture {
+    private func yearSwipeGesture(keeping scrollTarget: AnalysisScrollTarget) -> some Gesture {
         DragGesture(minimumDistance: 32)
             .onEnded { value in
                 let horizontalDistance = value.translation.width
@@ -389,15 +410,16 @@ struct AnalysisView: View {
                 }
 
                 if horizontalDistance < 0 {
-                    moveSelectedYear(by: 1)
+                    moveSelectedYear(by: 1, keeping: scrollTarget)
                 } else {
-                    moveSelectedYear(by: -1)
+                    moveSelectedYear(by: -1, keeping: scrollTarget)
                 }
             }
     }
 
-    private func moveSelectedYear(by delta: Int) {
+    private func moveSelectedYear(by delta: Int, keeping scrollTarget: AnalysisScrollTarget? = nil) {
         selectedYear = min(max(selectedYear + delta, 2000), 2100)
+        pendingScrollTarget = scrollTarget
     }
 
     private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {
@@ -483,6 +505,12 @@ struct AnalysisView: View {
             .clipped()
         }
     }
+}
+
+private enum AnalysisScrollTarget: String, Hashable {
+    case trend
+    case employer
+    case incomeCategory
 }
 
 private struct TrendPoint: Identifiable {

@@ -23,11 +23,12 @@ struct DocumentPreviewView: View {
         Group {
             if let fileURL, fileType == .image,
                let image = UIImage(contentsOfFile: fileURL.path) {
-                ScrollView([.horizontal, .vertical]) {
+                GeometryReader { proxy in
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
-                        .padding()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background(Color(.systemBackground))
                 }
                 .background(Color(.systemBackground))
             } else if let fileURL {
