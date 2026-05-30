@@ -243,48 +243,50 @@ struct PayRecordFormView: View {
         }
     }
 
+    @ViewBuilder
     private var pendingDocumentSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("保存時に、この給与明細へ給与明細または賞与明細として紐づけます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
 
-            if let pendingDocumentFileURL {
-                NavigationLink {
-                    DocumentPreviewView(
-                        title: pendingDocumentType.label,
-                        fileType: pendingDocumentFileType,
-                        fileURL: pendingDocumentFileURL
-                    )
-                } label: {
-                    pendingDocumentSummaryRow
-                }
-            } else {
+        if let pendingDocumentFileURL {
+            NavigationLink {
+                DocumentPreviewView(
+                    title: pendingDocumentType.label,
+                    fileType: pendingDocumentFileType,
+                    fileURL: pendingDocumentFileURL
+                )
+            } label: {
                 pendingDocumentSummaryRow
             }
-
-            Button {
-                isPickingPDF = true
-            } label: {
-                Label("PDFを選択", systemImage: "doc")
-            }
-
-            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                Label("画像を選択", systemImage: "photo")
-            }
-
-            Button {
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    isShowingCamera = true
-                } else {
-                    showValidation("この端末ではカメラを使用できません。画像選択またはPDF選択を使ってください。")
-                }
-            } label: {
-                Label(pendingDocumentFileURL == nil ? "カメラで撮影" : "カメラで撮り直す", systemImage: "camera")
-            }
-
+        } else {
+            pendingDocumentSummaryRow
         }
-        .padding(.vertical, 2)
+
+        Button {
+            isPickingPDF = true
+        } label: {
+            Label("PDFを選択", systemImage: "doc")
+        }
+        .buttonStyle(.borderless)
+
+        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            Label("画像を選択", systemImage: "photo")
+        }
+        .buttonStyle(.borderless)
+
+        Button {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                isShowingCamera = true
+            } else {
+                showValidation("この端末ではカメラを使用できません。画像選択またはPDF選択を使ってください。")
+            }
+        } label: {
+            Label(pendingDocumentFileURL == nil ? "カメラで撮影" : "カメラで撮り直す", systemImage: "camera")
+        }
+        .buttonStyle(.borderless)
     }
 
     private var pendingDocumentSummaryRow: some View {
