@@ -22,7 +22,6 @@ struct DocumentListView: View {
 
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingDocument = false
-    @State private var documentDraft: DocumentDraft?
     @State private var selectedSummaryID: Int?
 
     private var yearPayRecords: [PayRecord] {
@@ -130,9 +129,6 @@ struct DocumentListView: View {
                         .onTapGesture {
                             selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
                         }
-                        .onLongPressGesture {
-                            openWithholdingSlipForm(for: summary)
-                        }
                     }
                 }
             }
@@ -179,15 +175,6 @@ struct DocumentListView: View {
                 DocumentFormView(initialYear: selectedYear)
             }
         }
-        .sheet(item: $documentDraft) { draft in
-            NavigationStack {
-                DocumentFormView(
-                    initialYear: draft.year,
-                    initialDocumentType: draft.documentType,
-                    initialEmployer: draft.employer
-                )
-            }
-        }
     }
 
     private func documentStatusText(_ title: String, _ value: String, color: Color) -> some View {
@@ -221,18 +208,6 @@ struct DocumentListView: View {
         )
     }
 
-    private func openWithholdingSlipForm(for summary: DocumentWorkplaceSummary) {
-        guard let employer = summary.employer else {
-            return
-        }
-
-        documentDraft = DocumentDraft(
-            documentType: .withholdingSlip,
-            year: selectedYear,
-            employer: employer
-        )
-    }
-
     private func summaryID(for employer: Employer?) -> Int {
         employer?.persistentModelID.hashValue ?? -1
     }
@@ -257,13 +232,6 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let grossTotal: Int
     let withholdingStatus: DocumentStatus
     let paymentStatementStatus: DocumentStatus
-}
-
-private struct DocumentDraft: Identifiable {
-    let id = UUID()
-    let documentType: DocumentType
-    let year: Int
-    let employer: Employer
 }
 
 private enum DocumentStatus: Equatable {
