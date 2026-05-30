@@ -290,7 +290,7 @@ struct AnalysisView: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                LegendDot(color: .cyan, text: "総支給額")
+                LegendDot(color: .cyan, text: "額面")
                 LegendDot(color: .blue, text: "手取り")
             }
             .font(.caption)
@@ -367,10 +367,6 @@ struct AnalysisView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 220)
             .clipped()
-
-            Text("棒は総支給額、線は手取りを表します。")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 }
