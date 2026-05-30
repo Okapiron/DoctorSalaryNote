@@ -36,13 +36,13 @@ struct PayRecordListView: View {
             )
         }
         .sorted { lhs, rhs in
-            if lhs.recordCount == rhs.recordCount {
-                if lhs.grossTotal == rhs.grossTotal {
+            if lhs.grossTotal == rhs.grossTotal {
+                if lhs.recordCount == rhs.recordCount {
                     return lhs.employerName.localizedStandardCompare(rhs.employerName) == .orderedAscending
                 }
-                return lhs.grossTotal > rhs.grossTotal
+                return lhs.recordCount > rhs.recordCount
             }
-            return lhs.recordCount > rhs.recordCount
+            return lhs.grossTotal > rhs.grossTotal
         }
     }
 

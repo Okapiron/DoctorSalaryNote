@@ -25,10 +25,8 @@ struct AnalysisView: View {
     }
 
     private var annualSummaries: [AnalysisPeriodSummary] {
-        let latestYear = max(selectedYear, payRecords.map(\.paymentYear).max() ?? selectedYear)
-
         return (0..<5).reversed().map { offset in
-            let year = latestYear - offset
+            let year = selectedYear - offset
             let records = payRecords.filter { $0.paymentYear == year }
             return AnalysisPeriodSummary(period: year, label: "\(year)年", records: records)
         }
@@ -43,14 +41,56 @@ struct AnalysisView: View {
 
     private var annualTrendPoints: [TrendPoint] {
         annualSummaries.map {
-            TrendPoint(id: "\($0.period)", label: $0.label, grossTotal: $0.grossTotal, netTotal: $0.netTotal)
+            TrendPoint(
+                id: "\($0.period)",
+                label: $0.label,
+                grossTotal: $0.grossTotal,
+                netTotal: $0.netTotal,
+                hasRecords: !$0.records.isEmpty
+            )
         }
     }
 
     private var monthlyTrendPoints: [TrendPoint] {
         monthlySummaries.map {
-            TrendPoint(id: "\($0.month)", label: $0.label, grossTotal: $0.grossTotal, netTotal: $0.netTotal)
+            TrendPoint(
+                id: "\($0.month)",
+                label: $0.label,
+                grossTotal: $0.grossTotal,
+                netTotal: $0.netTotal,
+                hasRecords: !$0.records.isEmpty
+            )
         }
+    }
+
+    private var monthlyAxisMax: Int {
+        let grouped = Dictionary(grouping: payRecords) { record in
+            "\(record.paymentYear)-\(record.paymentMonth)"
+        }
+        let maxAmount = grouped.values
+            .map { records in
+                max(
+                    records.reduce(0) { $0 + $1.grossAmount },
+                    records.reduce(0) { $0 + $1.netAmount }
+                )
+            }
+            .max() ?? 0
+
+        return niceAxisMax(for: maxAmount)
+    }
+
+    private var annualAxisMax: Int {
+        let grouped = Dictionary(grouping: payRecords, by: \.paymentYear)
+        let maxAmount = grouped.values
+            .map { records in
+                max(
+                    records.reduce(0) { $0 + $1.grossAmount },
+                    records.reduce(0) { $0 + $1.netAmount }
+                )
+            }
+            .max() ?? 0
+
+        return niceAxisMax(for: maxAmount)
     }
 
     private var employerSummaries: [BreakdownSummary] {
@@ -128,7 +168,7 @@ struct AnalysisView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
                     title: "推移",
-                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "直近5年の推移"
+                    subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "\(selectedYearTitle)までの5年推移"
                 )
 
                 Picker("推移", selection: $trendScope) {
@@ -150,7 +190,8 @@ struct AnalysisView: View {
 
     private var annualTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            trendDataChart(points: annualTrendPoints)
+            trendDataChart(points: annualTrendPoints, axisMax: annualAxisMax)
+                .gesture(yearSwipeGesture)
 
             VStack(spacing: 0) {
                 ForEach(annualSummaries) { summary in
@@ -173,7 +214,8 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                trendDataChart(points: monthlyTrendPoints)
+                trendDataChart(points: monthlyTrendPoints, axisMax: monthlyAxisMax)
+                    .gesture(yearSwipeGesture)
 
                 VStack(spacing: 0) {
                     ForEach(monthlySummaries.filter { !$0.records.isEmpty }) { summary in
@@ -284,10 +326,27 @@ struct AnalysisView: View {
         }
     }
 
-    private func trendDataChart(points: [TrendPoint]) -> some View {
-        let maxAmount = max(points.map(\.grossTotal).max() ?? 0, points.map(\.netTotal).max() ?? 0)
-        let axisMax = niceAxisMax(for: maxAmount)
+    private var yearSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 32)
+            .onEnded { value in
+                let horizontalDistance = value.translation.width
+                let verticalDistance = value.translation.height
 
+                guard abs(horizontalDistance) > abs(verticalDistance),
+                      abs(horizontalDistance) > 48 else {
+                    return
+                }
+
+                if horizontalDistance < 0 {
+                    selectedYear = min(selectedYear + 1, 2100)
+                } else {
+                    selectedYear = max(selectedYear - 1, 2000)
+                }
+            }
+    }
+
+    private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {
+        let linePoints = points.filter(\.hasRecords)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 LegendDot(color: .cyan, text: "額面")
@@ -306,7 +365,7 @@ struct AnalysisView: View {
                     .cornerRadius(3)
                 }
 
-                ForEach(points) { point in
+                ForEach(linePoints) { point in
                     LineMark(
                         x: .value("期間", point.label),
                         y: .value("手取り", point.netTotal)
@@ -376,6 +435,7 @@ private struct TrendPoint: Identifiable {
     let label: String
     let grossTotal: Int
     let netTotal: Int
+    let hasRecords: Bool
 }
 
 private enum AnalysisTrendScope: String, CaseIterable, Identifiable {
