@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct EmployerListView: View {
     @Environment(\.modelContext) private var modelContext
@@ -11,6 +12,7 @@ struct EmployerListView: View {
     @State private var isAddingEmployer = false
     @State private var blockedEmployerName: String?
     @State private var payRecordEmployer: Employer?
+    @State private var draggedEmployerID: Int?
 
     private var displayedEmployers: [Employer] {
         employers.sorted { lhs, rhs in
@@ -59,6 +61,19 @@ struct EmployerListView: View {
                             }
                         }
                     }
+                    .onDrag {
+                        let id = employerID(for: employer)
+                        draggedEmployerID = id
+                        return NSItemProvider(object: "\(id)" as NSString)
+                    }
+                    .onDrop(
+                        of: [UTType.text],
+                        delegate: EmployerDropDelegate(
+                            targetEmployerID: employerID(for: employer),
+                            draggedEmployerID: $draggedEmployerID,
+                            moveEmployer: reorderEmployer
+                        )
+                    )
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
                             payRecordEmployer = employer
@@ -68,11 +83,16 @@ struct EmployerListView: View {
                         .tint(.teal)
                     }
                 }
+                .onMove(perform: moveEmployers)
                 .onDelete(perform: deleteEmployers)
             }
         }
         .navigationTitle("勤務先")
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                EditButton()
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isAddingEmployer = true
@@ -103,6 +123,42 @@ struct EmployerListView: View {
         }
     }
 
+    private func moveEmployers(from source: IndexSet, to destination: Int) {
+        var reorderedEmployers = displayedEmployers
+        reorderedEmployers.move(fromOffsets: source, toOffset: destination)
+
+        applySortOrder(to: reorderedEmployers)
+    }
+
+    private func reorderEmployer(draggedEmployerID: Int, targetEmployerID: Int) {
+        guard draggedEmployerID != targetEmployerID else {
+            return
+        }
+
+        var reorderedEmployers = displayedEmployers
+        guard let sourceIndex = reorderedEmployers.firstIndex(where: { employerID(for: $0) == draggedEmployerID }),
+              let targetIndex = reorderedEmployers.firstIndex(where: { employerID(for: $0) == targetEmployerID }) else {
+            return
+        }
+
+        let draggedEmployer = reorderedEmployers.remove(at: sourceIndex)
+        reorderedEmployers.insert(draggedEmployer, at: targetIndex)
+        applySortOrder(to: reorderedEmployers)
+    }
+
+    private func applySortOrder(to reorderedEmployers: [Employer]) {
+        for (index, employer) in reorderedEmployers.enumerated() {
+            employer.sortOrder = index
+            employer.updatedAt = Date()
+        }
+
+        try? modelContext.save()
+    }
+
+    private func employerID(for employer: Employer) -> Int {
+        employer.persistentModelID.hashValue
+    }
+
     private func deleteEmployers(at offsets: IndexSet) {
         let targets = offsets.map { displayedEmployers[$0] }
         if let blockedEmployer = targets.first(where: { !$0.payRecords.isEmpty }) {
@@ -115,5 +171,24 @@ struct EmployerListView: View {
         }
 
         try? modelContext.save()
+    }
+}
+
+private struct EmployerDropDelegate: DropDelegate {
+    let targetEmployerID: Int
+    @Binding var draggedEmployerID: Int?
+    let moveEmployer: (Int, Int) -> Void
+
+    func dropEntered(info _: DropInfo) {
+        guard let draggedEmployerID else {
+            return
+        }
+
+        moveEmployer(draggedEmployerID, targetEmployerID)
+    }
+
+    func performDrop(info _: DropInfo) -> Bool {
+        draggedEmployerID = nil
+        return true
     }
 }

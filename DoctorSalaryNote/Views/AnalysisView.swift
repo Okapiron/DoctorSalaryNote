@@ -166,7 +166,7 @@ struct AnalysisView: View {
     private var trendSection: some View {
         analysisCard(tint: .blue) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
+                yearControlHeader(
                     title: "推移",
                     subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "\(selectedYearTitle)までの5年推移"
                 )
@@ -186,6 +186,7 @@ struct AnalysisView: View {
                 }
             }
         }
+        .simultaneousGesture(yearSwipeGesture)
     }
 
     private var annualTrendContent: some View {
@@ -217,6 +218,19 @@ struct AnalysisView: View {
                 trendDataChart(points: monthlyTrendPoints, axisMax: monthlyAxisMax)
                     .gesture(yearSwipeGesture)
 
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(verbatim: "\(selectedYear)年合計")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(yenText(selectedYearGrossTotal))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                }
+                .padding(.trailing, 4)
+
                 VStack(spacing: 0) {
                     ForEach(monthlySummaries.filter { !$0.records.isEmpty }) { summary in
                         MonthSummaryRow(summary: summary)
@@ -244,25 +258,27 @@ struct AnalysisView: View {
     private var employerBreakdownSection: some View {
         analysisCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "勤務先別", subtitle: "額面バーと手取り位置で比較")
+                yearControlHeader(title: "勤務先別", subtitle: "額面バーと手取り位置で比較")
                 breakdownContent(
                     summaries: employerSummaries,
                     emptyMessage: "この年の勤務先別データはまだありません。"
                 )
             }
         }
+        .simultaneousGesture(yearSwipeGesture)
     }
 
     private var incomeCategoryBreakdownSection: some View {
         analysisCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較")
+                yearControlHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較")
                 breakdownContent(
                     summaries: incomeCategorySummaries,
                     emptyMessage: "この年の収入区分別データはまだありません。"
                 )
             }
         }
+        .simultaneousGesture(yearSwipeGesture)
     }
 
     private func breakdownContent(summaries: [BreakdownSummary], emptyMessage: String) -> some View {
@@ -326,6 +342,41 @@ struct AnalysisView: View {
         }
     }
 
+    private func yearControlHeader(title: String, subtitle: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 10) {
+                Button {
+                    moveSelectedYear(by: -1)
+                } label: {
+                    Text("＜")
+                        .font(.headline.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("前年へ")
+
+                Button {
+                    moveSelectedYear(by: 1)
+                } label: {
+                    Text("＞")
+                        .font(.headline.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("翌年へ")
+            }
+            .foregroundStyle(.cyan)
+        }
+    }
+
     private var yearSwipeGesture: some Gesture {
         DragGesture(minimumDistance: 32)
             .onEnded { value in
@@ -338,11 +389,15 @@ struct AnalysisView: View {
                 }
 
                 if horizontalDistance < 0 {
-                    selectedYear = min(selectedYear + 1, 2100)
+                    moveSelectedYear(by: 1)
                 } else {
-                    selectedYear = max(selectedYear - 1, 2000)
+                    moveSelectedYear(by: -1)
                 }
             }
+    }
+
+    private func moveSelectedYear(by delta: Int) {
+        selectedYear = min(max(selectedYear + delta, 2000), 2100)
     }
 
     private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {

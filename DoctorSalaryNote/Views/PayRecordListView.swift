@@ -15,6 +15,9 @@ struct PayRecordListView: View {
 
     @State private var isAddingPayRecord = false
     @State private var selectedEmployerID: Int?
+    @State private var payRecordPage = 0
+
+    private let payRecordsPerPage = 20
 
     private var employerSummaries: [PayRecordEmployerSummary] {
         var buckets: [Int: (employer: Employer?, records: [PayRecord])] = [:]
@@ -64,6 +67,28 @@ struct PayRecordListView: View {
         return employerSummaries.first { $0.id == selectedEmployerID }
     }
 
+    private var payRecordPageCount: Int {
+        max((filteredPayRecords.count + payRecordsPerPage - 1) / payRecordsPerPage, 1)
+    }
+
+    private var clampedPayRecordPage: Int {
+        min(max(payRecordPage, 0), payRecordPageCount - 1)
+    }
+
+    private var displayedPayRecords: [PayRecord] {
+        Array(filteredPayRecords.dropFirst(clampedPayRecordPage * payRecordsPerPage).prefix(payRecordsPerPage))
+    }
+
+    private var payRecordPageRangeText: String {
+        guard !filteredPayRecords.isEmpty else {
+            return "0件"
+        }
+
+        let start = clampedPayRecordPage * payRecordsPerPage + 1
+        let end = min(start + displayedPayRecords.count - 1, filteredPayRecords.count)
+        return "\(start)-\(end)件 / \(filteredPayRecords.count)件"
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -89,7 +114,7 @@ struct PayRecordListView: View {
                     }
 
                     Section {
-                        ForEach(filteredPayRecords) { record in
+                        ForEach(displayedPayRecords) { record in
                             NavigationLink {
                                 PayRecordDetailView(
                                     payRecord: record
@@ -106,6 +131,31 @@ struct PayRecordListView: View {
                         HStack {
                             Text(selectedSummary.map { "\($0.employerName)の給与明細" } ?? "給与明細")
                             Spacer()
+                            if payRecordPageCount > 1 {
+                                Button {
+                                    movePayRecordPage(by: -1)
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                }
+                                .disabled(clampedPayRecordPage == 0)
+                                .buttonStyle(.borderless)
+
+                                Text("\(clampedPayRecordPage + 1)/\(payRecordPageCount)")
+                                    .font(.caption)
+                                    .monospacedDigit()
+
+                                Button {
+                                    movePayRecordPage(by: 1)
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                }
+                                .disabled(clampedPayRecordPage >= payRecordPageCount - 1)
+                                .buttonStyle(.borderless)
+
+                                Text(payRecordPageRangeText)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                             if selectedEmployerID != nil {
                                 Button("すべて表示") {
                                     selectedEmployerID = nil
@@ -117,6 +167,13 @@ struct PayRecordListView: View {
                 }
             }
             .navigationTitle("給与")
+            .simultaneousGesture(payRecordPageSwipeGesture)
+            .onChange(of: selectedEmployerID) { _, _ in
+                payRecordPage = 0
+            }
+            .onChange(of: filteredPayRecords.count) { _, _ in
+                clampPayRecordPage()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
@@ -144,10 +201,38 @@ struct PayRecordListView: View {
 
     private func deletePayRecords(at offsets: IndexSet) {
         for index in offsets {
-            modelContext.delete(filteredPayRecords[index])
+            modelContext.delete(displayedPayRecords[index])
         }
 
         try? modelContext.save()
+        clampPayRecordPage()
+    }
+
+    private var payRecordPageSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 32)
+            .onEnded { value in
+                guard payRecordPageCount > 1 else {
+                    return
+                }
+
+                let horizontalDistance = value.translation.width
+                let verticalDistance = value.translation.height
+
+                guard abs(horizontalDistance) > abs(verticalDistance),
+                      abs(horizontalDistance) > 48 else {
+                    return
+                }
+
+                movePayRecordPage(by: horizontalDistance < 0 ? 1 : -1)
+            }
+    }
+
+    private func movePayRecordPage(by delta: Int) {
+        payRecordPage = min(max(clampedPayRecordPage + delta, 0), payRecordPageCount - 1)
+    }
+
+    private func clampPayRecordPage() {
+        payRecordPage = clampedPayRecordPage
     }
 
     private func summaryID(for employer: Employer?) -> Int {

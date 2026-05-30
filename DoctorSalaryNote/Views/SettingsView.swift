@@ -91,7 +91,7 @@ struct SettingsView: View {
             Picker("出力対象", selection: $selectedCSVYear) {
                 Text("すべての年").tag(0)
                 ForEach(availableYears, id: \.self) { year in
-                    Text("\(year)年").tag(year)
+                    Text(verbatim: "\(year)年").tag(year)
                 }
             }
 
