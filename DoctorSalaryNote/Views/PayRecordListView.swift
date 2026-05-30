@@ -16,6 +16,8 @@ struct PayRecordListView: View {
     @State private var isAddingPayRecord = false
     @State private var selectedEmployerID: Int?
     @State private var payRecordPage = 0
+    @State private var payRecordsPendingDeletion: [PayRecord] = []
+    @State private var isShowingPayRecordDeleteConfirmation = false
 
     private let payRecordsPerPage = 20
 
@@ -181,12 +183,38 @@ struct PayRecordListView: View {
                     PayRecordFormView()
                 }
             }
+            .alert("給与明細を削除しますか？", isPresented: $isShowingPayRecordDeleteConfirmation) {
+                Button("削除", role: .destructive) {
+                    deletePayRecordsAndLinkedDocuments(payRecordsPendingDeletion)
+                    payRecordsPendingDeletion = []
+                }
+                Button("キャンセル", role: .cancel) {
+                    payRecordsPendingDeletion = []
+                }
+            } message: {
+                Text("紐づく書類と保存済みファイルも一緒に削除されます。この操作は元に戻せません。")
+            }
         }
     }
 
     private func deletePayRecords(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(displayedPayRecords[index])
+        let targets = offsets.map { displayedPayRecords[$0] }
+        if targets.contains(where: { hasLinkedDocument(for: $0) }) {
+            payRecordsPendingDeletion = targets
+            isShowingPayRecordDeleteConfirmation = true
+            return
+        }
+
+        deletePayRecordsAndLinkedDocuments(targets)
+    }
+
+    private func deletePayRecordsAndLinkedDocuments(_ records: [PayRecord]) {
+        for record in records {
+            for document in linkedDocuments(for: record) {
+                DocumentFileStore.deleteFile(for: document)
+                modelContext.delete(document)
+            }
+            modelContext.delete(record)
         }
 
         try? modelContext.save()
@@ -382,7 +410,7 @@ struct PayRecordDetailView: View {
             Section("金額") {
                 amountRow("総支給額（額面）", payRecord.grossAmount)
                 amountRow("手取り", payRecord.netAmount)
-                amountRow("控除合計", payRecord.deductionTotal)
+                amountRow("控除合計", payRecord.deductionTotalForDisplay)
 
                 if let incomeTaxAmount = payRecord.incomeTaxAmount {
                     amountRow("所得税", incomeTaxAmount)
@@ -449,12 +477,12 @@ struct PayRecordDetailView: View {
         }
     }
 
-    private func amountRow(_ title: String, _ amount: Int) -> some View {
+    private func amountRow(_ title: String, _ amount: Int?) -> some View {
         HStack {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(amount.yenText)
+            Text(amount.map(\.yenText) ?? "未入力")
                 .font(.headline)
         }
     }
@@ -478,10 +506,6 @@ struct PayRecordDetailView: View {
 private extension PayRecord {
     var monthLabel: String {
         "\(paymentYear)年\(paymentMonth)月"
-    }
-
-    var deductionTotal: Int {
-        deductionAmount ?? max(grossAmount - netAmount, 0)
     }
 }
 

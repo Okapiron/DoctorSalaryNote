@@ -56,7 +56,7 @@ struct PayRecordFormView: View {
         _paymentMonth = State(initialValue: payRecord?.paymentMonth ?? Calendar.current.component(.month, from: Date()))
         _incomeCategory = State(initialValue: payRecord?.incomeCategory ?? initialEmployer?.defaultIncomeCategory ?? .partTimeSalary)
         _grossAmountText = State(initialValue: payRecord?.grossAmount.formText ?? "")
-        _netAmountText = State(initialValue: payRecord?.netAmount.formText ?? "")
+        _netAmountText = State(initialValue: payRecord?.netAmount?.formText ?? "")
         _deductionAmountText = State(initialValue: payRecord?.deductionAmount?.formText ?? "")
         _incomeTaxAmountText = State(initialValue: payRecord?.incomeTaxAmount?.formText ?? "")
         _residentTaxAmountText = State(initialValue: payRecord?.residentTaxAmount?.formText ?? "")
@@ -143,7 +143,7 @@ struct PayRecordFormView: View {
 
             Section {
                 currencyField("額面（必須）", text: $grossAmountText)
-                currencyField("手取り（必須）", text: $netAmountText)
+                currencyField("手取り", text: $netAmountText)
                 currencyField("控除合計", text: $deductionAmountText)
                 currencyField("所得税", text: $incomeTaxAmountText)
                 currencyField("住民税", text: $residentTaxAmountText)
@@ -236,6 +236,7 @@ struct PayRecordFormView: View {
             }
             .ignoresSafeArea()
         }
+        .interactiveDismissDisabled(payRecord == nil && pendingDocumentFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -362,7 +363,7 @@ struct PayRecordFormView: View {
             return
         }
 
-        guard let netAmount = requiredAmount(from: netAmountText) else {
+        guard let netAmount = optionalAmount(from: netAmountText) else {
             showValidation("手取りは0以上の整数で入力してください。")
             return
         }

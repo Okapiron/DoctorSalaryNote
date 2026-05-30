@@ -170,7 +170,7 @@ final class PayRecord {
     var paymentMonth: Int
     var incomeCategoryRaw: String
     var grossAmount: Int
-    var netAmount: Int
+    var netAmount: Int?
     var deductionAmount: Int?
     var incomeTaxAmount: Int?
     var residentTaxAmount: Int?
@@ -186,7 +186,7 @@ final class PayRecord {
         paymentMonth: Int,
         incomeCategory: IncomeCategory,
         grossAmount: Int,
-        netAmount: Int,
+        netAmount: Int? = nil,
         deductionAmount: Int? = nil,
         incomeTaxAmount: Int? = nil,
         residentTaxAmount: Int? = nil,
@@ -215,6 +215,34 @@ final class PayRecord {
     var incomeCategory: IncomeCategory {
         get { (IncomeCategory(rawValue: incomeCategoryRaw) ?? .other).normalized }
         set { incomeCategoryRaw = newValue.rawValue }
+    }
+
+    var netAmountForAggregation: Int {
+        netAmount ?? 0
+    }
+
+    var deductionTotalForAggregation: Int {
+        if let deductionAmount {
+            return deductionAmount
+        }
+
+        guard let netAmount else {
+            return 0
+        }
+
+        return max(grossAmount - netAmount, 0)
+    }
+
+    var deductionTotalForDisplay: Int? {
+        if let deductionAmount {
+            return deductionAmount
+        }
+
+        guard let netAmount else {
+            return nil
+        }
+
+        return max(grossAmount - netAmount, 0)
     }
 }
 

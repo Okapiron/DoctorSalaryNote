@@ -46,7 +46,7 @@ struct AnalysisView: View {
                 label: $0.label,
                 grossTotal: $0.grossTotal,
                 netTotal: $0.netTotal,
-                hasRecords: !$0.records.isEmpty
+                hasNetAmount: $0.hasNetAmount
             )
         }
     }
@@ -58,7 +58,7 @@ struct AnalysisView: View {
                 label: $0.label,
                 grossTotal: $0.grossTotal,
                 netTotal: $0.netTotal,
-                hasRecords: !$0.records.isEmpty
+                hasNetAmount: $0.hasNetAmount
             )
         }
     }
@@ -71,7 +71,7 @@ struct AnalysisView: View {
             .map { records in
                 max(
                     records.reduce(0) { $0 + $1.grossAmount },
-                    records.reduce(0) { $0 + $1.netAmount }
+                    records.reduce(0) { $0 + $1.netAmountForAggregation }
                 )
             }
             .max() ?? 0
@@ -85,7 +85,7 @@ struct AnalysisView: View {
             .map { records in
                 max(
                     records.reduce(0) { $0 + $1.grossAmount },
-                    records.reduce(0) { $0 + $1.netAmount }
+                    records.reduce(0) { $0 + $1.netAmountForAggregation }
                 )
             }
             .max() ?? 0
@@ -401,7 +401,7 @@ struct AnalysisView: View {
     }
 
     private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {
-        let linePoints = points.filter(\.hasRecords)
+        let linePoints = points.filter(\.hasNetAmount)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 LegendDot(color: .cyan, text: "額面")
@@ -490,7 +490,7 @@ private struct TrendPoint: Identifiable {
     let label: String
     let grossTotal: Int
     let netTotal: Int
-    let hasRecords: Bool
+    let hasNetAmount: Bool
 }
 
 private enum AnalysisTrendScope: String, CaseIterable, Identifiable {
@@ -514,8 +514,9 @@ private struct AnalysisPeriodSummary: Identifiable {
 
     var id: Int { period }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
-    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
-    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
+    var hasNetAmount: Bool { records.contains { $0.netAmount != nil } }
+    var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
 
 }
 
@@ -526,8 +527,9 @@ private struct AnalysisMonthSummary: Identifiable {
 
     var id: Int { month }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
-    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
-    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
+    var hasNetAmount: Bool { records.contains { $0.netAmount != nil } }
+    var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
 }
 
 private struct BreakdownSummary: Identifiable {
@@ -536,8 +538,9 @@ private struct BreakdownSummary: Identifiable {
 
     var id: String { label }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
-    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
-    var deductionTotal: Int { records.reduce(0) { $0 + deductionAmount(for: $1) } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
+    var hasNetAmount: Bool { records.contains { $0.netAmount != nil } }
+    var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
     var count: Int { records.count }
 }
 
@@ -685,7 +688,7 @@ private struct InfographicBreakdownRow: View {
     }
 
     private var netRatio: Double {
-        guard yearlyGrossTotal > 0 else { return 0 }
+        guard summary.hasNetAmount, yearlyGrossTotal > 0 else { return 0 }
         return min(Double(summary.netTotal) / Double(yearlyGrossTotal), 1)
     }
 
@@ -728,21 +731,23 @@ private struct InfographicBreakdownRow: View {
                         )
                         .frame(width: grossWidth)
 
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 10, height: 10)
-                        .overlay {
-                            Circle()
-                                .stroke(Color(.systemBackground), lineWidth: 2)
-                        }
-                        .offset(x: markerX - 5)
+                    if summary.hasNetAmount {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 10, height: 10)
+                            .overlay {
+                                Circle()
+                                    .stroke(Color(.systemBackground), lineWidth: 2)
+                            }
+                            .offset(x: markerX - 5)
+                    }
                 }
             }
             .frame(height: 12)
 
             HStack {
                 Spacer()
-                Text("手取り \(shortYenText(summary.netTotal))")
+                Text("手取り \(summary.hasNetAmount ? shortYenText(summary.netTotal) : "未入力")")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -765,10 +770,6 @@ private struct LegendDot: View {
                 .foregroundStyle(.secondary)
         }
     }
-}
-
-private func deductionAmount(for record: PayRecord) -> Int {
-    record.deductionAmount ?? max(record.grossAmount - record.netAmount, 0)
 }
 
 private func yenText(_ amount: Int) -> String {

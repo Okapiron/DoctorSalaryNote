@@ -41,7 +41,7 @@ enum CSVExportService {
                 record.employer?.name ?? "",
                 record.incomeCategory.label,
                 String(record.grossAmount),
-                String(record.netAmount),
+                optionalAmountText(record.netAmount),
                 String(totalDeductions(for: record)),
                 optionalAmountText(record.incomeTaxAmount),
                 optionalAmountText(record.residentTaxAmount),
@@ -64,7 +64,7 @@ enum CSVExportService {
     }
 
     private static func totalDeductions(for record: PayRecord) -> Int {
-        record.deductionAmount ?? max(record.grossAmount - record.netAmount, 0)
+        record.deductionTotalForAggregation
     }
 
     private static func optionalAmountText(_ amount: Int?) -> String {

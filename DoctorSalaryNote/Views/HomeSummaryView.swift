@@ -105,7 +105,7 @@ struct HomeSummaryView: View {
                             .cornerRadius(4)
                         }
 
-                        ForEach(recentMonthSummaries) { summary in
+                        ForEach(recentMonthSummaries.filter(\.hasNetAmount)) { summary in
                             LineMark(
                                 x: .value("月", summary.shortLabel),
                                 y: .value("手取り", summary.netTotal)
@@ -147,7 +147,7 @@ struct HomeSummaryView: View {
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal))
-                    summaryItem(title: "手取り", value: yenText(latestMonthSummary.netTotal))
+                    summaryItem(title: "手取り", value: latestMonthSummary.netDisplayText)
                     summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal))
                     summaryItem(title: "給与明細", value: "\(latestMonthSummary.records.count)件")
                 }
@@ -168,7 +168,7 @@ struct HomeSummaryView: View {
 
                 HStack(spacing: 12) {
                     compactAmount("額面", selectedYearSummary.grossTotal)
-                    compactAmount("手取り", selectedYearSummary.netTotal)
+                    compactAmount("手取り", selectedYearSummary.netDisplayText)
                     compactAmount("控除", selectedYearSummary.deductionTotal)
                 }
             }
@@ -176,11 +176,15 @@ struct HomeSummaryView: View {
     }
 
     private func compactAmount(_ title: String, _ amount: Int) -> some View {
+        compactAmount(title, shortYenText(amount))
+    }
+
+    private func compactAmount(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text(shortYenText(amount))
+            Text(value)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -296,8 +300,10 @@ private struct HomeMonthSummary: Identifiable {
     var shortLabel: String { "\(key.month)月" }
     var longLabel: String { "\(key.year)年\(key.month)月" }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
-    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
-    var deductionTotal: Int { records.reduce(0) { $0 + ($1.deductionAmount ?? max($1.grossAmount - $1.netAmount, 0)) } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
+    var hasNetAmount: Bool { records.contains { $0.netAmount != nil } }
+    var netDisplayText: String { hasNetAmount ? yenText(netTotal) : "未入力" }
+    var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
 
 }
 
@@ -306,8 +312,10 @@ private struct HomeYearSummary {
     let records: [PayRecord]
 
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
-    var netTotal: Int { records.reduce(0) { $0 + $1.netAmount } }
-    var deductionTotal: Int { records.reduce(0) { $0 + ($1.deductionAmount ?? max($1.grossAmount - $1.netAmount, 0)) } }
+    var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
+    var hasNetAmount: Bool { records.contains { $0.netAmount != nil } }
+    var netDisplayText: String { hasNetAmount ? shortYenText(netTotal) : "未入力" }
+    var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
 }
 
 private struct RecentPayRecordRow: View {
@@ -331,7 +339,7 @@ private struct RecentPayRecordRow: View {
             HStack {
                 Text("額面 \(yenText(record.grossAmount))")
                 Spacer()
-                Text("手取り \(yenText(record.netAmount))")
+                Text("手取り \(record.netAmount.map(yenText) ?? "未入力")")
                     .foregroundStyle(.teal)
             }
             .font(.caption)

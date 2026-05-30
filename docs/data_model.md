@@ -93,6 +93,10 @@
 
 支払日が未入力の場合も、支給年月によって年別・年度別集計に含める。
 
+netAmountは任意入力とする。未入力の場合は、手取り集計では0として加算するが、グラフや詳細表示では未入力であることが分かるように扱う。
+
+deductionAmountが未入力でnetAmountが入力されている場合は、grossAmount - netAmountを控除合計の補完値として使う。deductionAmountとnetAmountの両方が未入力の場合は、控除合計も未入力相当として扱う。
+
 ## Entity: Document
 
 源泉徴収票、支払調書、雇用契約書などの書類を表す。

@@ -213,6 +213,7 @@ struct DocumentFormView: View {
             }
             .ignoresSafeArea()
         }
+        .interactiveDismissDisabled(pendingNewFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
             Button("OK", role: .cancel) {}
         } message: {
