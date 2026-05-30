@@ -9,8 +9,6 @@ struct HomeSummaryView: View {
         SortDescriptor(\PayRecord.createdAt, order: .reverse)
     ]) private var payRecords: [PayRecord]
 
-    @Query private var documentAttachments: [DocumentAttachment]
-
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
 
     private var latestMonthKey: MonthKey {
@@ -54,7 +52,7 @@ struct HomeSummaryView: View {
     }
 
     private var recentRecords: [PayRecord] {
-        Array(payRecords.prefix(5))
+        Array(payRecords.prefix(3))
     }
 
     var body: some View {
@@ -64,7 +62,6 @@ struct HomeSummaryView: View {
                 latestMonthSection
                 yearSummarySection
                 recentRecordsSection
-                documentAlertSection
             }
             .padding()
         }
@@ -160,13 +157,8 @@ struct HomeSummaryView: View {
         homeCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
                 Stepper(value: $selectedYear, in: 2000...2100) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: "\(selectedYear)年の合計")
-                            .font(.headline)
-                        Text("税務・書類整理で使う年別の集計")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: "\(selectedYear)年の合計")
+                        .font(.headline)
                 }
 
                 HStack(spacing: 12) {
@@ -213,7 +205,7 @@ struct HomeSummaryView: View {
                 sectionHeader(title: "最近の給与明細", subtitle: "登録した給与明細をすぐ確認")
 
                 if recentRecords.isEmpty {
-                    Text("給与明細を登録すると、直近5件がここに表示されます。")
+                    Text("給与明細を登録すると、直近3件がここに表示されます。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,25 +231,6 @@ struct HomeSummaryView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-
-    private var documentAlertSection: some View {
-        homeCard(tint: .orange) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label("書類チェック", systemImage: "doc.text.magnifyingglass")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(documentAttachments.count)件")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(documentAttachments.isEmpty ? "書類を登録すると、ここに保存件数が表示されます。" : "源泉徴収票・支払調書の登録状況は、書類タブで確認できます。")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
         }
     }
