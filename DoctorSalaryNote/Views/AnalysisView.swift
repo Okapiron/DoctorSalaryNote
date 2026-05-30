@@ -287,7 +287,6 @@ struct AnalysisView: View {
     private func trendDataChart(points: [TrendPoint]) -> some View {
         let maxAmount = max(points.map(\.grossTotal).max() ?? 0, points.map(\.netTotal).max() ?? 0)
         let axisMax = niceAxisMax(for: maxAmount)
-        let chartWidth = max(CGFloat(points.count) * 56, 320)
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
@@ -296,79 +295,87 @@ struct AnalysisView: View {
             }
             .font(.caption)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                Chart {
-                    ForEach(points) { point in
-                        BarMark(
-                            x: .value("期間", point.label),
-                            y: .value("総支給額", point.grossTotal),
-                            width: .ratio(0.56)
-                        )
-                        .foregroundStyle(Color.cyan.opacity(0.72))
-                        .cornerRadius(3)
-                    }
+            Chart {
+                ForEach(points) { point in
+                    BarMark(
+                        x: .value("期間", point.label),
+                        y: .value("総支給額", point.grossTotal),
+                        width: .ratio(points.count > 8 ? 0.42 : 0.56)
+                    )
+                    .foregroundStyle(Color.cyan.opacity(0.72))
+                    .cornerRadius(3)
+                }
 
-                    ForEach(points) { point in
-                        LineMark(
-                            x: .value("期間", point.label),
-                            y: .value("手取り", point.netTotal)
-                        )
-                        .foregroundStyle(.blue)
-                        .interpolationMethod(.linear)
-                        .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                ForEach(points) { point in
+                    LineMark(
+                        x: .value("期間", point.label),
+                        y: .value("手取り", point.netTotal)
+                    )
+                    .foregroundStyle(.blue)
+                    .interpolationMethod(.linear)
+                    .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
-                        PointMark(
-                            x: .value("期間", point.label),
-                            y: .value("手取り", point.netTotal)
-                        )
-                        .foregroundStyle(.blue)
-                        .symbolSize(28)
-                    }
+                    PointMark(
+                        x: .value("期間", point.label),
+                        y: .value("手取り", point.netTotal)
+                    )
+                    .foregroundStyle(.blue)
+                    .symbolSize(24)
                 }
-                .chartLegend(.hidden)
-                .chartYScale(domain: 0...axisMax)
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                        AxisGridLine()
-                            .foregroundStyle(Color(.systemGray5))
-                        AxisTick()
-                            .foregroundStyle(Color(.systemGray4))
-                        AxisValueLabel {
-                            if let amount = value.as(Int.self) {
-                                Text(shortYenText(amount))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: points.map(\.label)) { value in
-                        AxisTick()
-                            .foregroundStyle(Color(.systemGray4))
-                        AxisValueLabel(anchor: .top) {
-                            if let label = value.as(String.self) {
-                                Text(label)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: true, vertical: false)
-                            }
-                        }
-                    }
-                }
-                .chartPlotStyle { plotArea in
-                    plotArea
-                        .background(Color(.systemBackground))
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(Color(.systemGray5))
-                                .frame(height: 1)
-                        }
-                }
-                .frame(width: chartWidth, height: 220)
             }
-            .scrollClipDisabled()
+            .chartLegend(.hidden)
+            .chartYScale(domain: 0...axisMax)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(Color(.systemGray5))
+                    AxisTick()
+                        .foregroundStyle(Color(.systemGray4))
+                    AxisValueLabel {
+                        if let amount = value.as(Int.self) {
+                            Text(shortYenText(amount))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: points.map(\.label)) { value in
+                    AxisTick()
+                        .foregroundStyle(Color(.systemGray4))
+                    AxisValueLabel(anchor: .top) {
+                        if let label = value.as(String.self) {
+                            Text(compactAxisLabel(label))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .background(Color(.systemBackground))
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(Color(.systemGray5))
+                            .frame(height: 1)
+                    }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .clipped()
+
+            if points.count > 8 {
+                HStack {
+                    Text("月")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
 
             Text("棒は総支給額、線は手取りを表します。")
                 .font(.caption2)
@@ -674,6 +681,12 @@ private func shortYenText(_ amount: Int) -> String {
         return String(format: "%.1f万円", value)
     }
     return yenText(amount)
+}
+
+private func compactAxisLabel(_ label: String) -> String {
+    label
+        .replacingOccurrences(of: "月", with: "")
+        .replacingOccurrences(of: "年", with: "")
 }
 
 private func niceAxisMax(for amount: Int) -> Int {
