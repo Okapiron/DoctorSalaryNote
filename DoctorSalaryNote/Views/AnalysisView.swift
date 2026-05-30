@@ -333,7 +333,7 @@ struct AnalysisView: View {
                         .foregroundStyle(Color(.systemGray4))
                     AxisValueLabel {
                         if let amount = value.as(Int.self) {
-                            Text(shortYenText(amount))
+                            Text(compactChartAmountText(amount))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
@@ -367,15 +367,6 @@ struct AnalysisView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 220)
             .clipped()
-
-            if points.count > 8 {
-                HStack {
-                    Text("月")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }
 
             Text("棒は総支給額、線は手取りを表します。")
                 .font(.caption2)
@@ -687,6 +678,13 @@ private func compactAxisLabel(_ label: String) -> String {
     label
         .replacingOccurrences(of: "月", with: "")
         .replacingOccurrences(of: "年", with: "")
+}
+
+private func compactChartAmountText(_ amount: Int) -> String {
+    let value = amount >= 10_000 ? amount / 10_000 : amount
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    return formatter.string(from: NSNumber(value: value)) ?? String(value)
 }
 
 private func niceAxisMax(for amount: Int) -> Int {
