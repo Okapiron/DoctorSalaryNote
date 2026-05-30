@@ -414,7 +414,7 @@ struct AnalysisView: View {
                     BarMark(
                         x: .value("期間", point.label),
                         y: .value("総支給額", point.grossTotal),
-                        width: .ratio(points.count > 8 ? 0.42 : 0.56)
+                        width: .ratio(points.count > 8 ? 0.50 : 0.64)
                     )
                     .foregroundStyle(Color.cyan.opacity(0.72))
                     .cornerRadius(3)
