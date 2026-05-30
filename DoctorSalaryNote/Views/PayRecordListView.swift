@@ -132,29 +132,15 @@ struct PayRecordListView: View {
                             Text(selectedSummary.map { "\($0.employerName)の給与明細" } ?? "給与明細")
                             Spacer()
                             if payRecordPageCount > 1 {
-                                Button {
-                                    movePayRecordPage(by: -1)
-                                } label: {
-                                    Image(systemName: "chevron.left")
-                                }
-                                .disabled(clampedPayRecordPage == 0)
-                                .buttonStyle(.borderless)
-
                                 Text("\(clampedPayRecordPage + 1)/\(payRecordPageCount)")
                                     .font(.caption)
                                     .monospacedDigit()
 
-                                Button {
-                                    movePayRecordPage(by: 1)
-                                } label: {
-                                    Image(systemName: "chevron.right")
-                                }
-                                .disabled(clampedPayRecordPage >= payRecordPageCount - 1)
-                                .buttonStyle(.borderless)
-
                                 Text(payRecordPageRangeText)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+
+                                pageControl
                             }
                             if selectedEmployerID != nil {
                                 Button("すべて表示") {
@@ -167,7 +153,6 @@ struct PayRecordListView: View {
                 }
             }
             .navigationTitle("給与")
-            .simultaneousGesture(payRecordPageSwipeGesture)
             .onChange(of: selectedEmployerID) { _, _ in
                 payRecordPage = 0
             }
@@ -208,23 +193,36 @@ struct PayRecordListView: View {
         clampPayRecordPage()
     }
 
-    private var payRecordPageSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 32)
-            .onEnded { value in
-                guard payRecordPageCount > 1 else {
-                    return
-                }
-
-                let horizontalDistance = value.translation.width
-                let verticalDistance = value.translation.height
-
-                guard abs(horizontalDistance) > abs(verticalDistance),
-                      abs(horizontalDistance) > 48 else {
-                    return
-                }
-
-                movePayRecordPage(by: horizontalDistance < 0 ? 1 : -1)
+    private var pageControl: some View {
+        HStack(spacing: 0) {
+            Button {
+                movePayRecordPage(by: -1)
+            } label: {
+                Image(systemName: "minus")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 34, height: 26)
             }
+            .disabled(clampedPayRecordPage == 0)
+            .buttonStyle(.borderless)
+            .accessibilityLabel("前のページ")
+
+            Divider()
+                .frame(height: 18)
+
+            Button {
+                movePayRecordPage(by: 1)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 34, height: 26)
+            }
+            .disabled(clampedPayRecordPage >= payRecordPageCount - 1)
+            .buttonStyle(.borderless)
+            .accessibilityLabel("次のページ")
+        }
+        .foregroundStyle(.primary)
+        .background(Color(.systemGray5))
+        .clipShape(Capsule())
     }
 
     private func movePayRecordPage(by delta: Int) {
