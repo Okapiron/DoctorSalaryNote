@@ -13,6 +13,8 @@ struct AnalysisView: View {
     @State private var trendScope: AnalysisTrendScope = .monthly
     @State private var pendingScrollTarget: AnalysisScrollTarget?
 
+    private let scrollRetentionAnchor = UnitPoint(x: 0.5, y: 0.12)
+
     private var selectedYearTitle: String {
         "\(selectedYear)年"
     }
@@ -141,6 +143,10 @@ struct AnalysisView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("分析")
+            .transaction { transaction in
+                transaction.disablesAnimations = true
+                transaction.animation = nil
+            }
             .onChange(of: pendingScrollTarget) { _, target in
                 guard let target else {
                     return
@@ -150,9 +156,9 @@ struct AnalysisView: View {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
                     withTransaction(transaction) {
-                        scrollProxy.scrollTo(target, anchor: .top)
+                        scrollProxy.scrollTo(target, anchor: scrollRetentionAnchor)
+                        pendingScrollTarget = nil
                     }
-                    pendingScrollTarget = nil
                 }
             }
         }
@@ -277,7 +283,7 @@ struct AnalysisView: View {
     private var employerBreakdownSection: some View {
         analysisCard(tint: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                yearControlHeader(title: "勤務先別", subtitle: "額面バーと手取り位置で比較", scrollTarget: .employer)
+                yearControlHeader(title: "勤務先別", subtitle: "\(selectedYearTitle)の勤務先別", scrollTarget: .employer)
                 breakdownContent(
                     summaries: employerSummaries,
                     emptyMessage: "この年の勤務先別データはまだありません。"
@@ -291,7 +297,7 @@ struct AnalysisView: View {
     private var incomeCategoryBreakdownSection: some View {
         analysisCard(tint: .mint) {
             VStack(alignment: .leading, spacing: 12) {
-                yearControlHeader(title: "収入区分別", subtitle: "常勤給与、賞与、外勤、スポット、その他の比較", scrollTarget: .incomeCategory)
+                yearControlHeader(title: "収入区分別", subtitle: "\(selectedYearTitle)の収入区分別", scrollTarget: .incomeCategory)
                 breakdownContent(
                     summaries: incomeCategorySummaries,
                     emptyMessage: "この年の収入区分別データはまだありません。"
@@ -418,8 +424,12 @@ struct AnalysisView: View {
     }
 
     private func moveSelectedYear(by delta: Int, keeping scrollTarget: AnalysisScrollTarget? = nil) {
-        selectedYear = min(max(selectedYear + delta, 2000), 2100)
-        pendingScrollTarget = scrollTarget
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            selectedYear = min(max(selectedYear + delta, 2000), 2100)
+            pendingScrollTarget = scrollTarget
+        }
     }
 
     private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {
