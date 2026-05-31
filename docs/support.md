@@ -18,7 +18,7 @@
 
 お問い合わせは、GitHub Issuesで受け付けています。
 
-- GitHub Issues: https://github.com/Okapiron/DoctorSalaryNote/issues
+- [GitHub Issues](https://github.com/Okapiron/DoctorSalaryNote/issues)
 
 Issueを作成する際は、可能な範囲で以下を記載してください。
 

@@ -64,5 +64,5 @@ Face ID / Touch IDロックを有効にした場合、認証はAppleが提供す
 
 お問い合わせ、サポート、プライバシーポリシーに関するご質問は、以下のサポートページまたはGitHub Issuesからご連絡ください。
 
-- サポートページ: https://okapiron.github.io/DoctorSalaryNote/support.html
-- GitHub Issues: https://github.com/Okapiron/DoctorSalaryNote/issues
+- [サポートページ](https://okapiron.github.io/DoctorSalaryNote/support.html)
+- [GitHub Issues](https://github.com/Okapiron/DoctorSalaryNote/issues)
