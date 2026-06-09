@@ -127,12 +127,24 @@ In progress
 
 ## Phase 6: 入力補助
 
+### Status
+
+Experiment
+
 ### Scope
 
 - OCRによる入力補助
 - 過去入力からの候補表示
 - 勤務先別のよく使う収入区分
 - 添付書類からの半自動登録
+
+### Initial Experiment Scope
+
+- PDFまたは画像を添付した給与明細新規登録で、端末内OCRを実行する
+- 支給年月、勤務先、額面、手取り、控除合計の候補を抽出する
+- 候補は自動保存せず、ユーザー確認後にフォームへ反映する
+- OCR画像、PDF、認識テキストを外部サーバーへ送信しない
+- TestFlightで実機検証し、精度と入力体験が不十分であればNo Goとして戻す
 
 ### Completion Criteria
 

@@ -46,6 +46,9 @@ struct PayRecordFormView: View {
     @State private var pendingDocumentFileSize: Int?
     @State private var pendingDocumentFileType: AttachmentFileType = .other
     @State private var pendingDocumentFileURL: URL?
+    @State private var isRunningOCR = false
+    @State private var ocrStatusMessage: String?
+    @State private var ocrCandidateForReview: OCRPayRecordCandidate?
 
     init(payRecord: PayRecord? = nil, initialEmployer: Employer? = nil) {
         self.payRecord = payRecord
@@ -236,6 +239,19 @@ struct PayRecordFormView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(item: $ocrCandidateForReview) { candidate in
+            OCRCandidateReviewView(
+                candidate: candidate,
+                matchedEmployerName: matchedEmployer(for: candidate)?.name,
+                onCancel: {
+                    ocrCandidateForReview = nil
+                },
+                onApply: {
+                    applyOCRCandidate(candidate)
+                    ocrCandidateForReview = nil
+                }
+            )
+        }
         .interactiveDismissDisabled(payRecord == nil && pendingDocumentFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
             Button("OK", role: .cancel) {}
@@ -250,6 +266,19 @@ struct PayRecordFormView: View {
             Text("保存時に、この給与明細へ給与明細または賞与明細として紐づけます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            if isRunningOCR {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("書類から入力候補を読み取っています。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let ocrStatusMessage {
+                Text(ocrStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
 
         if let pendingDocumentFileURL {
@@ -506,6 +535,96 @@ struct PayRecordFormView: View {
         pendingDocumentFileType = storedFile.fileType
         pendingDocumentFileURL = newFileURL
         validationMessage = nil
+        startOCRIfNeeded(for: newFileURL, fileType: storedFile.fileType)
+    }
+
+    private func startOCRIfNeeded(for fileURL: URL?, fileType: AttachmentFileType) {
+        guard payRecord == nil,
+              let fileURL,
+              fileType == .pdf || fileType == .image else {
+            return
+        }
+
+        isRunningOCR = true
+        ocrStatusMessage = nil
+
+        Task {
+            do {
+                let candidate = try await OCRExtractionService.extractPayRecordCandidate(from: fileURL, fileType: fileType)
+                await MainActor.run {
+                    guard pendingDocumentFileURL == fileURL else {
+                        return
+                    }
+
+                    isRunningOCR = false
+                    if candidate.hasUsableValue {
+                        ocrStatusMessage = "入力候補を見つけました。内容を確認して反映できます。"
+                        ocrCandidateForReview = candidate
+                    } else {
+                        ocrStatusMessage = "自動入力できる候補は見つかりませんでした。必要な項目は手入力してください。"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    guard pendingDocumentFileURL == fileURL else {
+                        return
+                    }
+
+                    isRunningOCR = false
+                    ocrStatusMessage = "書類を読み取れませんでした。必要な項目は手入力してください。"
+                }
+            }
+        }
+    }
+
+    private func applyOCRCandidate(_ candidate: OCRPayRecordCandidate) {
+        if let employer = matchedEmployer(for: candidate) {
+            selectedEmployerID = employer.persistentModelID
+        }
+
+        if let paymentYear = candidate.paymentYear {
+            self.paymentYear = paymentYear
+        }
+
+        if let paymentMonth = candidate.paymentMonth {
+            self.paymentMonth = paymentMonth
+        }
+
+        if let grossAmount = candidate.grossAmount {
+            grossAmountText = grossAmount.formText
+        }
+
+        if let netAmount = candidate.netAmount {
+            netAmountText = netAmount.formText
+        }
+
+        if let deductionAmount = candidate.deductionAmount {
+            deductionAmountText = deductionAmount.formText
+        }
+
+        validationMessage = nil
+        ocrStatusMessage = "OCR候補をフォームに反映しました。保存前に金額を確認してください。"
+    }
+
+    private func matchedEmployer(for candidate: OCRPayRecordCandidate) -> Employer? {
+        let recognizedText = normalizedSearchText(candidate.recognizedText)
+
+        return selectableEmployers
+            .filter { employer in
+                let employerName = normalizedSearchText(employer.name)
+                return !employerName.isEmpty && recognizedText.contains(employerName)
+            }
+            .max { lhs, rhs in
+                normalizedSearchText(lhs.name).count < normalizedSearchText(rhs.name).count
+            }
+    }
+
+    private func normalizedSearchText(_ text: String) -> String {
+        let halfWidthText = text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text
+        return halfWidthText
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+            .lowercased()
     }
 
     private func cancel() {
@@ -571,5 +690,74 @@ private extension Int {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: self)) ?? String(self)
+    }
+}
+
+private struct OCRCandidateReviewView: View {
+    let candidate: OCRPayRecordCandidate
+    let matchedEmployerName: String?
+    let onCancel: () -> Void
+    let onApply: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("OCRで読み取れた項目だけを候補として表示しています。反映後も、保存前に必ず金額を確認してください。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("読み取り候補") {
+                    candidateRow("勤務先", value: matchedEmployerName)
+                    candidateRow("支給年月", value: paymentDateText)
+                    candidateRow("額面", value: amountText(candidate.grossAmount))
+                    candidateRow("手取り", value: amountText(candidate.netAmount))
+                    candidateRow("控除合計", value: amountText(candidate.deductionAmount))
+                }
+            }
+            .navigationTitle("OCR候補")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("使わない", action: onCancel)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("反映", action: onApply)
+                }
+            }
+        }
+    }
+
+    private var paymentDateText: String? {
+        guard let year = candidate.paymentYear,
+              let month = candidate.paymentMonth else {
+            return nil
+        }
+        return "\(year)年\(month)月"
+    }
+
+    private func candidateRow(_ title: String, value: String?) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value ?? "候補なし")
+                .fontWeight(value == nil ? .regular : .semibold)
+                .foregroundStyle(value == nil ? .secondary : .primary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func amountText(_ amount: Int?) -> String? {
+        guard let amount else {
+            return nil
+        }
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        let formattedAmount = formatter.string(from: NSNumber(value: amount)) ?? String(amount)
+        return "\(formattedAmount)円"
     }
 }
