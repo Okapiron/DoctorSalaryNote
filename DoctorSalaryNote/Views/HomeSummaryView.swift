@@ -10,6 +10,7 @@ struct HomeSummaryView: View {
     ]) private var payRecords: [PayRecord]
 
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
+    @State private var isAddingCurrentMonthRecord = false
 
     private var latestMonthKey: MonthKey {
         if let record = payRecords.first {
@@ -58,6 +59,7 @@ struct HomeSummaryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                currentMonthImportButton
                 latestMonthSection
                 monthlyTrendSection
                 yearSummarySection
@@ -76,6 +78,40 @@ struct HomeSummaryView: View {
                 }
             }
         }
+        .sheet(isPresented: $isAddingCurrentMonthRecord) {
+            NavigationStack {
+                PayRecordFormView()
+            }
+        }
+    }
+
+    private var currentMonthImportButton: some View {
+        Button {
+            isAddingCurrentMonthRecord = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+
+                Text("今月の記録を取り込む")
+                    .font(.headline)
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .opacity(0.8)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.teal)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("今月の給与明細を追加し、PDFや写真から読み取れます")
     }
 
     private var monthlyTrendSection: some View {
