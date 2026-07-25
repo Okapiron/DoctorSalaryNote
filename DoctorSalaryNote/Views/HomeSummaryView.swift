@@ -80,7 +80,7 @@ struct HomeSummaryView: View {
         }
         .sheet(isPresented: $isAddingCurrentMonthRecord) {
             NavigationStack {
-                PayRecordFormView()
+                PayRecordFormView(showsImportOptionsOnAppear: true)
             }
         }
     }

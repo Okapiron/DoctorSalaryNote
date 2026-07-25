@@ -20,6 +20,7 @@ struct PayRecordFormView: View {
 
     private let payRecord: PayRecord?
     private let initialEmployer: Employer?
+    private let showsImportOptionsOnAppear: Bool
 
     @State private var selectedEmployerID: PersistentIdentifier?
     @State private var paymentYear: Int
@@ -37,7 +38,10 @@ struct PayRecordFormView: View {
     @State private var isShowingValidation = false
     @State private var isAddingEmployer = false
     @State private var isPickingPDF = false
+    @State private var isPickingImage = false
     @State private var isShowingCamera = false
+    @State private var isShowingInitialImportOptions = false
+    @State private var hasPresentedInitialImportOptions = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var pendingDocumentLocalFilePath: String?
     @State private var pendingDocumentStoredFileName: String?
@@ -50,9 +54,14 @@ struct PayRecordFormView: View {
     @State private var ocrStatusMessage: String?
     @State private var ocrCandidateForReview: OCRPayRecordCandidate?
 
-    init(payRecord: PayRecord? = nil, initialEmployer: Employer? = nil) {
+    init(
+        payRecord: PayRecord? = nil,
+        initialEmployer: Employer? = nil,
+        showsImportOptionsOnAppear: Bool = false
+    ) {
         self.payRecord = payRecord
         self.initialEmployer = initialEmployer
+        self.showsImportOptionsOnAppear = showsImportOptionsOnAppear
         let resolvedEmployer = payRecord?.employer ?? initialEmployer
         _selectedEmployerID = State(initialValue: resolvedEmployer?.persistentModelID)
         _paymentYear = State(initialValue: payRecord?.paymentYear ?? Calendar.current.component(.year, from: Date()))
@@ -225,6 +234,11 @@ struct PayRecordFormView: View {
             allowsMultipleSelection: false,
             onCompletion: handlePDFImport
         )
+        .photosPicker(
+            isPresented: $isPickingImage,
+            selection: $selectedPhotoItem,
+            matching: .images
+        )
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else {
                 return
@@ -254,6 +268,47 @@ struct PayRecordFormView: View {
                     ocrCandidateForReview = nil
                 }
             )
+        }
+        .onAppear {
+            guard payRecord == nil,
+                  showsImportOptionsOnAppear,
+                  !hasPresentedInitialImportOptions else {
+                return
+            }
+            hasPresentedInitialImportOptions = true
+            isShowingInitialImportOptions = true
+        }
+        .confirmationDialog(
+            "今月の記録を取り込む",
+            isPresented: $isShowingInitialImportOptions,
+            titleVisibility: .visible
+        ) {
+            Button {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    isShowingCamera = true
+                } else {
+                    showValidation("Simulatorではカメラを使用できません。写真またはPDFを選択してください。")
+                }
+            } label: {
+                Label("カメラで撮影", systemImage: "camera")
+            }
+
+            Button {
+                isPickingImage = true
+            } label: {
+                Label("写真から選択", systemImage: "photo")
+            }
+
+            Button {
+                isPickingPDF = true
+            } label: {
+                Label("PDFを選択", systemImage: "doc")
+            }
+
+            Button("手入力で始める") {}
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("給与明細を撮影または選択すると、支給年月や金額の入力候補を読み取ります。")
         }
         .interactiveDismissDisabled(payRecord == nil && pendingDocumentFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
