@@ -97,6 +97,71 @@ netAmountは任意入力とする。未入力の場合は、手取り集計で�
 
 deductionAmountが未入力でnetAmountが入力されている場合は、grossAmount - netAmountを控除合計の補完値として使う。deductionAmountとnetAmountの両方が未入力の場合は、控除合計も未入力相当として扱う。
 
+grossAmount、netAmount、deductionAmountは、給与明細の基本3項目として常に扱う。ただし永続化上の必須項目はgrossAmountのみとし、netAmountとdeductionAmountは未入力状態と0円を区別する。
+
+## Entity: WorkplaceDeductionDefinition
+
+勤務先ごとの控除内訳項目の表示設定を表す。主要3項目のOCR検証後に実装する。
+
+### Fields
+
+- id
+- workplaceId
+- standardCategory
+- displayName
+- sortOrder
+- isActive
+- createdAt
+- updatedAt
+
+### standardCategory
+
+- incomeTax
+- residentTax
+- healthInsurance
+- employeePension
+- employmentInsurance
+- custom
+
+### Notes
+
+所得税、住民税、健康保険、厚生年金、雇用保険は標準候補として用意する。
+
+勤務先ごとに不要な項目を非表示にできる。
+
+介護保険、組合費、財形、社宅費などはcustomとして追加できる。
+
+項目を非表示または名称変更しても、過去の給与明細に保存された値と表示名は変更しない。
+
+## Entity: PayslipDeductionItem
+
+給与明細ごとの控除内訳を表す。主要3項目のOCR検証後に実装する。
+
+### Fields
+
+- id
+- payslipId
+- deductionDefinitionId
+- displayNameSnapshot
+- amount
+- inputSource
+- ocrConfidence
+- createdAt
+- updatedAt
+
+### inputSource
+
+- manual
+- ocr
+
+### Notes
+
+displayNameSnapshotは、勤務先側の項目名が後から変更・非表示になっても、保存時の給与明細表示を維持するために持つ。
+
+amountは未入力の項目をレコードなし、明示的な0円をamount = 0として区別する。
+
+ocrConfidenceはOCR候補の検証用情報であり、税務上の正しさを保証する値として表示しない。
+
 ## Entity: Document
 
 源泉徴収票、支払調書、雇用契約書などの書類を表す。
@@ -191,6 +256,16 @@ deductionAmountが未入力でnetAmountが入力されている場合は、gross
 
 給与明細は必ず1つの勤務先に紐づく。
 
+### Workplace 1 - N WorkplaceDeductionDefinition
+
+1つの勤務先は複数の控除内訳項目設定を持てる。
+
+### Payslip 1 - N PayslipDeductionItem
+
+1つの給与明細は複数の控除内訳を持てる。
+
+控除項目設定を非表示にしても、過去のPayslipDeductionItemは保持する。
+
 ### Workplace 1 - N Document
 
 1つの勤務先は複数の書類を持てる。
@@ -244,6 +319,8 @@ netAmountまたはdeductionAmountが未入力の場合、その項目の集計�
 
 - CSV出力用の列定義
 - OCR結果の一時保存
+- 既存の所得税、住民税、社会保険料、その他控除フィールドからPayslipDeductionItemへの移行
+- 勤務先別の控除合計・控除内訳推移
 - バックアップファイルの形式
 - 税理士共有用エクスポート
 - 複数端末同期を行う場合の同期ID

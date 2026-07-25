@@ -243,11 +243,14 @@ struct PayRecordFormView: View {
             OCRCandidateReviewView(
                 candidate: candidate,
                 matchedEmployerName: matchedEmployer(for: candidate)?.name,
+                fileURL: pendingDocumentFileURL,
+                fileType: pendingDocumentFileType,
+                fileTitle: pendingDocumentOriginalFileName ?? pendingDocumentType.label,
                 onCancel: {
                     ocrCandidateForReview = nil
                 },
-                onApply: {
-                    applyOCRCandidate(candidate)
+                onApply: { selectedFields in
+                    applyOCRCandidate(candidate, selectedFields: selectedFields)
                     ocrCandidateForReview = nil
                 }
             )
@@ -577,33 +580,42 @@ struct PayRecordFormView: View {
         }
     }
 
-    private func applyOCRCandidate(_ candidate: OCRPayRecordCandidate) {
-        if let employer = matchedEmployer(for: candidate) {
+    private func applyOCRCandidate(
+        _ candidate: OCRPayRecordCandidate,
+        selectedFields: Set<OCRField>
+    ) {
+        if selectedFields.contains(.employer),
+           let employer = matchedEmployer(for: candidate) {
             selectedEmployerID = employer.persistentModelID
         }
 
-        if let paymentYear = candidate.paymentYear {
+        if selectedFields.contains(.paymentDate),
+           let paymentYear = candidate.paymentYear {
             self.paymentYear = paymentYear
         }
 
-        if let paymentMonth = candidate.paymentMonth {
+        if selectedFields.contains(.paymentDate),
+           let paymentMonth = candidate.paymentMonth {
             self.paymentMonth = paymentMonth
         }
 
-        if let grossAmount = candidate.grossAmount {
+        if selectedFields.contains(.grossAmount),
+           let grossAmount = candidate.grossAmount {
             grossAmountText = grossAmount.formText
         }
 
-        if let netAmount = candidate.netAmount {
+        if selectedFields.contains(.netAmount),
+           let netAmount = candidate.netAmount {
             netAmountText = netAmount.formText
         }
 
-        if let deductionAmount = candidate.deductionAmount {
+        if selectedFields.contains(.deductionAmount),
+           let deductionAmount = candidate.deductionAmount {
             deductionAmountText = deductionAmount.formText
         }
 
         validationMessage = nil
-        ocrStatusMessage = "OCR候補をフォームに反映しました。保存前に金額を確認してください。"
+        ocrStatusMessage = "選択した候補を反映しました。保存前に書類と金額を照合してください。"
     }
 
     private func matchedEmployer(for candidate: OCRPayRecordCandidate) -> Employer? {
@@ -696,24 +708,119 @@ private extension Int {
 private struct OCRCandidateReviewView: View {
     let candidate: OCRPayRecordCandidate
     let matchedEmployerName: String?
+    let fileURL: URL?
+    let fileType: AttachmentFileType
+    let fileTitle: String
     let onCancel: () -> Void
-    let onApply: () -> Void
+    let onApply: (Set<OCRField>) -> Void
+
+    @State private var useEmployer: Bool
+    @State private var usePaymentDate: Bool
+    @State private var useGrossAmount: Bool
+    @State private var useNetAmount: Bool
+    @State private var useDeductionAmount: Bool
+
+    init(
+        candidate: OCRPayRecordCandidate,
+        matchedEmployerName: String?,
+        fileURL: URL?,
+        fileType: AttachmentFileType,
+        fileTitle: String,
+        onCancel: @escaping () -> Void,
+        onApply: @escaping (Set<OCRField>) -> Void
+    ) {
+        self.candidate = candidate
+        self.matchedEmployerName = matchedEmployerName
+        self.fileURL = fileURL
+        self.fileType = fileType
+        self.fileTitle = fileTitle
+        self.onCancel = onCancel
+        self.onApply = onApply
+        _useEmployer = State(initialValue: matchedEmployerName != nil)
+        _usePaymentDate = State(
+            initialValue: candidate.paymentDateCandidate?.isInitiallySelected ?? false
+        )
+        _useGrossAmount = State(
+            initialValue: candidate.grossCandidate?.isInitiallySelected ?? false
+        )
+        _useNetAmount = State(
+            initialValue: candidate.netCandidate?.isInitiallySelected ?? false
+        )
+        _useDeductionAmount = State(
+            initialValue: candidate.deductionCandidate?.isInitiallySelected ?? false
+        )
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("OCRで読み取れた項目だけを候補として表示しています。反映後も、保存前に必ず金額を確認してください。")
+                    Text("書類から読み取った入力候補です。使う項目だけを選び、原本と照合してから反映してください。確信度が低い候補は選択していません。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
+                if let fileURL {
+                    Section("原本") {
+                        NavigationLink {
+                            DocumentPreviewView(
+                                title: fileTitle,
+                                fileType: fileType,
+                                fileURL: fileURL
+                            )
+                        } label: {
+                            Label("書類を確認", systemImage: "doc.text.magnifyingglass")
+                        }
+                    }
+                }
+
                 Section("読み取り候補") {
-                    candidateRow("勤務先", value: matchedEmployerName)
-                    candidateRow("支給年月", value: paymentDateText)
-                    candidateRow("額面", value: amountText(candidate.grossAmount))
-                    candidateRow("手取り", value: amountText(candidate.netAmount))
-                    candidateRow("控除合計", value: amountText(candidate.deductionAmount))
+                    candidateSelectionRow(
+                        title: "勤務先",
+                        value: matchedEmployerName,
+                        confidenceText: matchedEmployerName == nil ? nil : "名称一致",
+                        sourceText: nil,
+                        isSelected: $useEmployer
+                    )
+                    candidateSelectionRow(
+                        title: "支給年月",
+                        value: paymentDateText,
+                        confidenceText: confidenceText(candidate.paymentDateCandidate?.confidence),
+                        sourceText: candidate.paymentDateCandidate?.sourceText,
+                        isSelected: $usePaymentDate
+                    )
+                    candidateSelectionRow(
+                        title: "総支給額（額面）",
+                        value: amountText(candidate.grossAmount),
+                        confidenceText: confidenceText(candidate.grossCandidate),
+                        sourceText: candidate.grossCandidate?.sourceText,
+                        isSelected: $useGrossAmount
+                    )
+                    candidateSelectionRow(
+                        title: "振込額（手取り）",
+                        value: amountText(candidate.netAmount),
+                        confidenceText: confidenceText(candidate.netCandidate),
+                        sourceText: candidate.netCandidate?.sourceText,
+                        isSelected: $useNetAmount
+                    )
+                    candidateSelectionRow(
+                        title: "控除合計",
+                        value: amountText(candidate.deductionAmount),
+                        confidenceText: confidenceText(candidate.deductionCandidate),
+                        sourceText: candidate.deductionCandidate?.sourceText,
+                        isSelected: $useDeductionAmount
+                    )
+                }
+
+                if candidate.deductionCandidate?.isInferred == true {
+                    Section {
+                        Label(
+                            "控除合計は、総支給額と振込額の差から推定した候補です。原本に控除合計の記載がある場合は、その金額を優先してください。",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             .navigationTitle("OCR候補")
@@ -724,10 +831,33 @@ private struct OCRCandidateReviewView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("反映", action: onApply)
+                    Button("反映") {
+                        onApply(selectedFields)
+                    }
+                    .disabled(selectedFields.isEmpty)
                 }
             }
         }
+    }
+
+    private var selectedFields: Set<OCRField> {
+        var fields = Set<OCRField>()
+        if useEmployer, matchedEmployerName != nil {
+            fields.insert(.employer)
+        }
+        if usePaymentDate, candidate.paymentDateCandidate != nil {
+            fields.insert(.paymentDate)
+        }
+        if useGrossAmount, candidate.grossCandidate != nil {
+            fields.insert(.grossAmount)
+        }
+        if useNetAmount, candidate.netCandidate != nil {
+            fields.insert(.netAmount)
+        }
+        if useDeductionAmount, candidate.deductionCandidate != nil {
+            fields.insert(.deductionAmount)
+        }
+        return fields
     }
 
     private var paymentDateText: String? {
@@ -738,16 +868,61 @@ private struct OCRCandidateReviewView: View {
         return "\(year)年\(month)月"
     }
 
-    private func candidateRow(_ title: String, value: String?) -> some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value ?? "候補なし")
-                .fontWeight(value == nil ? .regular : .semibold)
-                .foregroundStyle(value == nil ? .secondary : .primary)
-                .multilineTextAlignment(.trailing)
+    @ViewBuilder
+    private func candidateSelectionRow(
+        title: String,
+        value: String?,
+        confidenceText: String?,
+        sourceText: String?,
+        isSelected: Binding<Bool>
+    ) -> some View {
+        if value == nil {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("候補なし")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Toggle(isOn: isSelected) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        if let confidenceText {
+                            Text(confidenceText)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(confidenceText.contains("要確認") ? .orange : .cyan)
+                        }
+                    }
+
+                    Text(value ?? "")
+                        .font(.body.weight(.semibold))
+                        .monospacedDigit()
+
+                    if let sourceText, !sourceText.isEmpty {
+                        Text("根拠: \(sourceText)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
         }
+    }
+
+    private func confidenceText(_ confidence: OCRCandidateConfidence?) -> String? {
+        confidence?.label
+    }
+
+    private func confidenceText(_ candidate: OCRAmountCandidate?) -> String? {
+        guard let candidate else {
+            return nil
+        }
+        return candidate.isInferred ? "推定・要確認" : candidate.confidence.label
     }
 
     private func amountText(_ amount: Int?) -> String? {
