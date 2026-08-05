@@ -308,7 +308,7 @@ struct PayRecordFormView: View {
             Button("手入力で始める") {}
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("給与明細を撮影または選択すると、支給年月や金額の入力候補を読み取ります。")
+            Text("給与明細を撮影または選択すると、支給年月や金額の入力候補を読み取ります。PDFはスクリーンショットにせず、そのまま選択できます。")
         }
         .interactiveDismissDisabled(payRecord == nil && pendingDocumentFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
@@ -545,7 +545,9 @@ struct PayRecordFormView: View {
 
     private func handlePhotoImport(_ item: PhotosPickerItem) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            guard let sourceData = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: sourceData),
+                  let data = image.jpegData(compressionQuality: 0.95) else {
                 await MainActor.run {
                     showValidation("画像を読み込めませんでした。")
                 }
@@ -878,7 +880,7 @@ private struct OCRCandidateReviewView: View {
                     }
                 }
             }
-            .navigationTitle("OCR候補")
+            .navigationTitle("読み取り結果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

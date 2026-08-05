@@ -121,11 +121,27 @@ enum OCRExtractionService {
 
             if fileType == .pdf {
                 lines.append(contentsOf: embeddedPDFTextLines(from: fileURL))
-            }
-
-            let images = try imagesForRecognition(from: fileURL, fileType: fileType)
-            for (pageIndex, image) in images.enumerated() {
-                lines.append(contentsOf: try recognizeTextLines(in: image, pageIndex: pageIndex))
+                do {
+                    let images = try imagesForRecognition(from: fileURL, fileType: fileType)
+                    for (pageIndex, image) in images.enumerated() {
+                        guard let recognizedLines = try? recognizeTextLines(
+                            in: image,
+                            pageIndex: pageIndex
+                        ) else {
+                            continue
+                        }
+                        lines.append(contentsOf: recognizedLines)
+                    }
+                } catch {
+                    guard !lines.isEmpty else {
+                        throw error
+                    }
+                }
+            } else {
+                let images = try imagesForRecognition(from: fileURL, fileType: fileType)
+                for (pageIndex, image) in images.enumerated() {
+                    lines.append(contentsOf: try recognizeTextLines(in: image, pageIndex: pageIndex))
+                }
             }
 
             guard !lines.isEmpty else {
