@@ -8,7 +8,30 @@ import UniformTypeIdentifiers
 private struct PendingOCRApplication {
     let candidate: OCRPayRecordCandidate
     let selectedFields: Set<OCRField>
+    let selectedCustomDeductionIDs: Set<UUID>
     let employerID: PersistentIdentifier?
+}
+
+private struct DeductionDraft: Identifiable {
+    let id: UUID
+    var templateKey: UUID?
+    var name: String
+    var amountText: String
+    var inputSource: DeductionItemInputSource
+
+    init(
+        id: UUID = UUID(),
+        templateKey: UUID? = nil,
+        name: String,
+        amountText: String = "",
+        inputSource: DeductionItemInputSource = .manual
+    ) {
+        self.id = id
+        self.templateKey = templateKey
+        self.name = name
+        self.amountText = amountText
+        self.inputSource = inputSource
+    }
 }
 
 struct PayRecordFormView: View {
@@ -37,8 +60,8 @@ struct PayRecordFormView: View {
     @State private var deductionAmountText: String
     @State private var incomeTaxAmountText: String
     @State private var residentTaxAmountText: String
-    @State private var socialInsuranceAmountText: String
     @State private var otherDeductionAmountText: String
+    @State private var deductionDrafts: [DeductionDraft]
     @State private var memo: String
     @State private var validationMessage: String?
     @State private var isShowingValidation = false
@@ -80,8 +103,28 @@ struct PayRecordFormView: View {
         _deductionAmountText = State(initialValue: payRecord?.deductionAmount?.formText ?? "")
         _incomeTaxAmountText = State(initialValue: payRecord?.incomeTaxAmount?.formText ?? "")
         _residentTaxAmountText = State(initialValue: payRecord?.residentTaxAmount?.formText ?? "")
-        _socialInsuranceAmountText = State(initialValue: payRecord?.socialInsuranceAmount?.formText ?? "")
         _otherDeductionAmountText = State(initialValue: payRecord?.otherDeductionAmount?.formText ?? "")
+        let existingDeductionDrafts = payRecord?.sortedDeductionItems.map { item in
+            DeductionDraft(
+                templateKey: item.templateKey,
+                name: item.displayNameSnapshot,
+                amountText: item.amount.formText,
+                inputSource: item.inputSource
+            )
+        } ?? []
+        if existingDeductionDrafts.isEmpty,
+           let legacySocialInsurance = payRecord?.socialInsuranceAmount {
+            _deductionDrafts = State(
+                initialValue: [
+                    DeductionDraft(
+                        name: "社会保険料",
+                        amountText: legacySocialInsurance.formText
+                    )
+                ]
+            )
+        } else {
+            _deductionDrafts = State(initialValue: existingDeductionDrafts)
+        }
         _memo = State(initialValue: payRecord?.memo ?? "")
     }
 
@@ -137,11 +180,13 @@ struct PayRecordFormView: View {
                 }
                 .onChange(of: selectedEmployerID) { _, newValue in
                     guard payRecord == nil,
-                          let employer = employers.first(where: { $0.persistentModelID == newValue }),
-                          let defaultCategory = employer.defaultIncomeCategory else {
+                          let employer = employers.first(where: { $0.persistentModelID == newValue }) else {
                         return
                     }
-                    incomeCategory = defaultCategory
+                    if let defaultCategory = employer.defaultIncomeCategory {
+                        incomeCategory = defaultCategory
+                    }
+                    mergeDeductionTemplates(from: employer)
                 }
 
                 Picker("収入区分（必須）", selection: $incomeCategory) {
@@ -167,12 +212,41 @@ struct PayRecordFormView: View {
                 currencyField("控除合計", text: $deductionAmountText)
                 currencyField("所得税", text: $incomeTaxAmountText)
                 currencyField("住民税", text: $residentTaxAmountText)
-                currencyField("社会保険料", text: $socialInsuranceAmountText)
-                currencyField("その他控除", text: $otherDeductionAmountText)
+
+                ForEach($deductionDrafts) { $draft in
+                    deductionDraftRow(draft: $draft)
+                }
+
+                Button {
+                    deductionDrafts.append(DeductionDraft(name: ""))
+                } label: {
+                    Label("控除項目を追加", systemImage: "plus.circle")
+                }
+
+                if let estimatedOtherDeduction {
+                    LabeledContent {
+                        Text(estimatedOtherDeduction >= 0 ? estimatedOtherDeduction.currencyText : "要確認")
+                            .foregroundStyle(estimatedOtherDeduction >= 0 ? Color.secondary : Color.orange)
+                    } label: {
+                        Text("その他（推定）")
+                    }
+                    if estimatedOtherDeduction < 0 {
+                        Label(
+                            "控除内訳の合計が控除合計を超えています。原本と入力内容を確認してください。",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    }
+                }
+
+                if deductionAmountText.isEmpty, !otherDeductionAmountText.isEmpty {
+                    currencyField("その他控除（従来項目）", text: $otherDeductionAmountText)
+                }
             } header: {
                 Text("金額")
             } footer: {
-                Text("金額は円単位の整数で保存します。カンマや「円」を含めても入力できます。")
+                Text("勤務先固有の控除項目は、この勤務先の次回入力とOCRにも引き継がれます。その他は控除合計から所得税・住民税・個別項目を引いた推定値です。")
             }
 
             Section("メモ") {
@@ -273,10 +347,11 @@ struct PayRecordFormView: View {
                     pendingOCRApplication = nil
                     ocrCandidateForReview = nil
                 },
-                onApply: { selectedFields, employerID in
+                onApply: { selectedFields, selectedCustomDeductionIDs, employerID in
                     pendingOCRApplication = PendingOCRApplication(
                         candidate: candidate,
                         selectedFields: selectedFields,
+                        selectedCustomDeductionIDs: selectedCustomDeductionIDs,
                         employerID: employerID
                     )
                     ocrCandidateForReview = nil
@@ -288,6 +363,10 @@ struct PayRecordFormView: View {
                selectedEmployerID == nil,
                selectableEmployers.count == 1 {
                 selectedEmployerID = selectableEmployers[0].persistentModelID
+            }
+
+            if let selectedEmployer {
+                mergeDeductionTemplates(from: selectedEmployer)
             }
 
             guard payRecord == nil,
@@ -452,6 +531,43 @@ struct PayRecordFormView: View {
         }
     }
 
+    private func deductionDraftRow(draft: Binding<DeductionDraft>) -> some View {
+        HStack(spacing: 8) {
+            TextField("項目名", text: draft.name)
+                .textInputAutocapitalization(.never)
+
+            TextField("0", text: Binding(
+                get: { draft.amountText.wrappedValue },
+                set: { draft.amountText.wrappedValue = groupedAmountText(from: $0) }
+            ))
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.trailing)
+            .font(.body.monospacedDigit())
+            .frame(maxWidth: 120)
+
+            Button(role: .destructive) {
+                deductionDrafts.removeAll { $0.id == draft.wrappedValue.id }
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("控除項目を削除")
+        }
+    }
+
+    private var estimatedOtherDeduction: Int? {
+        guard let deductionAmount = parsedOptionalAmount(from: deductionAmountText) else {
+            return nil
+        }
+
+        let incomeTax = parsedOptionalAmount(from: incomeTaxAmountText) ?? 0
+        let residentTax = parsedOptionalAmount(from: residentTaxAmountText) ?? 0
+        let customTotal = deductionDrafts.reduce(0) { result, draft in
+            result + (parsedOptionalAmount(from: draft.amountText) ?? 0)
+        }
+        return deductionAmount - incomeTax - residentTax - customTotal
+    }
+
     private func documentLabel(_ document: DocumentAttachment) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -487,13 +603,26 @@ struct PayRecordFormView: View {
         guard let deductionAmount = optionalAmount(from: deductionAmountText),
               let incomeTaxAmount = optionalAmount(from: incomeTaxAmountText),
               let residentTaxAmount = optionalAmount(from: residentTaxAmountText),
-              let socialInsuranceAmount = optionalAmount(from: socialInsuranceAmountText),
-              let otherDeductionAmount = optionalAmount(from: otherDeductionAmountText) else {
+              optionalAmount(from: otherDeductionAmountText) != nil else {
             showValidation("任意の金額項目も、入力する場合は0以上の整数にしてください。")
             return
         }
 
+        guard let validatedDeductionDrafts = validatedDeductionDrafts() else {
+            return
+        }
+
+        let resolvedOtherDeductionAmount: Int?
+        if deductionAmount != nil {
+            resolvedOtherDeductionAmount = estimatedOtherDeduction.flatMap { $0 >= 0 ? $0 : nil }
+        } else {
+            resolvedOtherDeductionAmount = parsedOptionalAmount(from: otherDeductionAmountText)
+        }
+
+        let targetRecord: PayRecord
+
         if let payRecord {
+            targetRecord = payRecord
             payRecord.employer = selectedEmployer
             payRecord.paymentYear = paymentYear
             payRecord.paymentMonth = paymentMonth
@@ -503,8 +632,8 @@ struct PayRecordFormView: View {
             payRecord.deductionAmount = deductionAmount
             payRecord.incomeTaxAmount = incomeTaxAmount
             payRecord.residentTaxAmount = residentTaxAmount
-            payRecord.socialInsuranceAmount = socialInsuranceAmount
-            payRecord.otherDeductionAmount = otherDeductionAmount
+            payRecord.socialInsuranceAmount = nil
+            payRecord.otherDeductionAmount = resolvedOtherDeductionAmount
             payRecord.memo = memo
             payRecord.updatedAt = Date()
         } else {
@@ -518,11 +647,12 @@ struct PayRecordFormView: View {
                 deductionAmount: deductionAmount,
                 incomeTaxAmount: incomeTaxAmount,
                 residentTaxAmount: residentTaxAmount,
-                socialInsuranceAmount: socialInsuranceAmount,
-                otherDeductionAmount: otherDeductionAmount,
+                socialInsuranceAmount: nil,
+                otherDeductionAmount: resolvedOtherDeductionAmount,
                 memo: memo
             )
             modelContext.insert(newRecord)
+            targetRecord = newRecord
 
             if let pendingDocumentLocalFilePath,
                let pendingDocumentStoredFileName,
@@ -547,12 +677,107 @@ struct PayRecordFormView: View {
             }
         }
 
+
+        replaceDeductionItems(
+            for: targetRecord,
+            employer: selectedEmployer,
+            drafts: validatedDeductionDrafts
+        )
+
         do {
             try modelContext.save()
             dismiss()
         } catch {
             showValidation("保存に失敗しました。もう一度お試しください。")
         }
+    }
+
+    private func validatedDeductionDrafts() -> [DeductionDraft]? {
+        var result: [DeductionDraft] = []
+        var names = Set<String>()
+
+        for draft in deductionDrafts {
+            let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasAmount = !normalizedAmountText(from: draft.amountText).isEmpty
+            if !hasAmount {
+                continue
+            }
+            guard !name.isEmpty else {
+                showValidation("控除項目の名前を入力してください。")
+                return nil
+            }
+            guard let amount = parsedOptionalAmount(from: draft.amountText) else {
+                showValidation("「\(name)」の金額を0以上の整数で入力してください。")
+                return nil
+            }
+            guard amount >= 0 else {
+                showValidation("「\(name)」の金額を0以上の整数で入力してください。")
+                return nil
+            }
+
+            let normalizedName = normalizedSearchText(name)
+            guard names.insert(normalizedName).inserted else {
+                showValidation("同じ名前の控除項目が重複しています。")
+                return nil
+            }
+
+            var validated = draft
+            validated.name = name
+            validated.amountText = amount.formText
+            result.append(validated)
+        }
+
+        return result
+    }
+
+    private func replaceDeductionItems(
+        for record: PayRecord,
+        employer: Employer,
+        drafts: [DeductionDraft]
+    ) {
+        record.deductionItems.forEach(modelContext.delete)
+
+        for (index, draft) in drafts.enumerated() {
+            guard let amount = parsedOptionalAmount(from: draft.amountText) else {
+                continue
+            }
+
+            let template = deductionTemplate(for: draft, employer: employer)
+            let item = PayRecordDeductionItem(
+                payRecord: record,
+                templateKey: template.templateKey,
+                displayNameSnapshot: draft.name,
+                amount: amount,
+                sortOrder: index,
+                inputSource: draft.inputSource
+            )
+            modelContext.insert(item)
+        }
+    }
+
+    private func deductionTemplate(
+        for draft: DeductionDraft,
+        employer: Employer
+    ) -> EmployerDeductionTemplate {
+        let existingTemplate = employer.deductionTemplates.first { template in
+            template.templateKey == draft.templateKey ||
+                normalizedSearchText(template.displayName) == normalizedSearchText(draft.name)
+        }
+
+        if let existingTemplate {
+            existingTemplate.displayName = draft.name
+            existingTemplate.isActive = true
+            existingTemplate.updatedAt = Date()
+            return existingTemplate
+        }
+
+        let template = EmployerDeductionTemplate(
+            employer: employer,
+            displayName: draft.name,
+            sortOrder: employer.deductionTemplates.count
+        )
+        modelContext.insert(template)
+        return template
     }
 
     private func handlePDFImport(_ result: Result<[URL], Error>) {
@@ -641,7 +866,11 @@ struct PayRecordFormView: View {
 
         Task {
             do {
-                let candidate = try await OCRExtractionService.extractPayRecordCandidate(from: fileURL, fileType: fileType)
+                let candidate = try await OCRExtractionService.extractPayRecordCandidate(
+                    from: fileURL,
+                    fileType: fileType,
+                    deductionFieldSpecs: ocrDeductionFieldSpecs
+                )
                 await MainActor.run {
                     guard pendingDocumentFileURL == fileURL else {
                         return
@@ -682,6 +911,7 @@ struct PayRecordFormView: View {
     private func applyOCRCandidate(
         _ candidate: OCRPayRecordCandidate,
         selectedFields: Set<OCRField>,
+        selectedCustomDeductionIDs: Set<UUID>,
         employerID: PersistentIdentifier?
     ) {
         if selectedFields.contains(.employer),
@@ -724,8 +954,31 @@ struct PayRecordFormView: View {
             residentTaxAmountText = residentTaxAmount.formText
         }
 
+        for customCandidate in candidate.customDeductionCandidates
+            where selectedCustomDeductionIDs.contains(customCandidate.id) {
+            if let index = deductionDrafts.firstIndex(where: { draft in
+                draft.templateKey == customCandidate.templateKey ||
+                    normalizedSearchText(draft.name) == normalizedSearchText(customCandidate.displayName)
+            }) {
+                deductionDrafts[index].amountText = customCandidate.amountCandidate.value.formText
+                deductionDrafts[index].inputSource = .ocr
+            } else {
+                deductionDrafts.append(
+                    DeductionDraft(
+                        templateKey: customCandidate.templateKey,
+                        name: customCandidate.displayName,
+                        amountText: customCandidate.amountCandidate.value.formText,
+                        inputSource: .ocr
+                    )
+                )
+            }
+        }
+
         validationMessage = nil
-        let appliedFields = appliedFieldLabels(for: selectedFields)
+        let appliedFields = appliedFieldLabels(
+            for: selectedFields,
+            customDeductionCount: selectedCustomDeductionIDs.count
+        )
         ocrStatusMessage = "フォームに反映しました（\(appliedFields)）。内容を照合し、右上の「保存」を押してください。"
     }
 
@@ -737,13 +990,17 @@ struct PayRecordFormView: View {
         applyOCRCandidate(
             application.candidate,
             selectedFields: application.selectedFields,
+            selectedCustomDeductionIDs: application.selectedCustomDeductionIDs,
             employerID: application.employerID
         )
         availableOCRCandidate = nil
         pendingOCRApplication = nil
     }
 
-    private func appliedFieldLabels(for selectedFields: Set<OCRField>) -> String {
+    private func appliedFieldLabels(
+        for selectedFields: Set<OCRField>,
+        customDeductionCount: Int
+    ) -> String {
         let orderedFields: [(OCRField, String)] = [
             (.employer, "勤務先"),
             (.paymentDate, "支給年月"),
@@ -756,7 +1013,11 @@ struct PayRecordFormView: View {
         let labels = orderedFields.compactMap { field, label in
             selectedFields.contains(field) ? label : nil
         }
-        return labels.joined(separator: "・")
+        var resolvedLabels = labels
+        if customDeductionCount > 0 {
+            resolvedLabels.append("控除内訳\(customDeductionCount)件")
+        }
+        return resolvedLabels.joined(separator: "・")
     }
 
     private func presentOCRCandidate(_ candidate: OCRPayRecordCandidate) {
@@ -827,6 +1088,75 @@ struct PayRecordFormView: View {
         return .some(value)
     }
 
+    private func parsedOptionalAmount(from text: String) -> Int? {
+        let normalizedText = normalizedAmountText(from: text)
+        guard !normalizedText.isEmpty,
+              let value = Int(normalizedText),
+              value >= 0 else {
+            return nil
+        }
+        return value
+    }
+
+    private func mergeDeductionTemplates(from employer: Employer) {
+        let existingTemplateKeys = Set(deductionDrafts.compactMap(\.templateKey))
+        let existingNames = Set(deductionDrafts.map { normalizedSearchText($0.name) })
+        let additions = employer.deductionTemplates
+            .filter(\.isActive)
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+            }
+            .filter {
+                !existingTemplateKeys.contains($0.templateKey) &&
+                    !existingNames.contains(normalizedSearchText($0.displayName))
+            }
+            .map {
+                DeductionDraft(templateKey: $0.templateKey, name: $0.displayName)
+            }
+        deductionDrafts.append(contentsOf: additions)
+    }
+
+    private var ocrDeductionFieldSpecs: [OCRDeductionFieldSpec] {
+        var specs: [OCRDeductionFieldSpec] = []
+        var knownNames = Set<String>()
+        let sourceEmployers = selectedEmployer.map { [$0] } ?? employers
+        let templates = sourceEmployers.flatMap(\.deductionTemplates)
+        for template in templates where template.isActive {
+            let normalizedName = normalizedSearchText(template.displayName)
+            guard knownNames.insert(normalizedName).inserted else {
+                continue
+            }
+            specs.append(
+                OCRDeductionFieldSpec(
+                    id: template.templateKey,
+                    templateKey: template.templateKey,
+                    displayName: template.displayName,
+                    keywords: template.ocrKeywords
+                )
+            )
+        }
+
+        let commonNames = [
+            "短期掛金", "健康保険", "介護保険", "厚生年金", "長期掛金",
+            "雇用保険", "共済掛金", "組合費", "財形", "社宅費"
+        ]
+        specs.append(contentsOf: commonNames.compactMap { name in
+            guard !knownNames.contains(normalizedSearchText(name)) else {
+                return nil
+            }
+            return OCRDeductionFieldSpec(
+                id: UUID(),
+                templateKey: nil,
+                displayName: name,
+                keywords: [name]
+            )
+        })
+        return specs
+    }
+
     private func normalizedAmountText(from text: String) -> String {
         let halfWidthText = text.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? text
         return halfWidthText
@@ -861,6 +1191,10 @@ private extension Int {
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: self)) ?? String(self)
     }
+
+    var currencyText: String {
+        "\(formText)円"
+    }
 }
 
 private struct OCRCandidateReviewView: View {
@@ -870,7 +1204,7 @@ private struct OCRCandidateReviewView: View {
     let fileType: AttachmentFileType
     let fileTitle: String
     let onCancel: () -> Void
-    let onApply: (Set<OCRField>, PersistentIdentifier?) -> Void
+    let onApply: (Set<OCRField>, Set<UUID>, PersistentIdentifier?) -> Void
 
     @State private var selectedEmployerID: PersistentIdentifier?
     @State private var usePaymentDate: Bool
@@ -879,6 +1213,7 @@ private struct OCRCandidateReviewView: View {
     @State private var useDeductionAmount: Bool
     @State private var useIncomeTaxAmount: Bool
     @State private var useResidentTaxAmount: Bool
+    @State private var selectedCustomDeductionIDs: Set<UUID>
 
     init(
         candidate: OCRPayRecordCandidate,
@@ -888,7 +1223,7 @@ private struct OCRCandidateReviewView: View {
         fileType: AttachmentFileType,
         fileTitle: String,
         onCancel: @escaping () -> Void,
-        onApply: @escaping (Set<OCRField>, PersistentIdentifier?) -> Void
+        onApply: @escaping (Set<OCRField>, Set<UUID>, PersistentIdentifier?) -> Void
     ) {
         self.candidate = candidate
         self.employers = employers
@@ -915,6 +1250,13 @@ private struct OCRCandidateReviewView: View {
         )
         _useResidentTaxAmount = State(
             initialValue: candidate.residentTaxCandidate?.isInitiallySelected ?? false
+        )
+        _selectedCustomDeductionIDs = State(
+            initialValue: Set(
+                candidate.customDeductionCandidates
+                    .filter { $0.amountCandidate.isInitiallySelected }
+                    .map(\.id)
+            )
         )
     }
 
@@ -1001,6 +1343,33 @@ private struct OCRCandidateReviewView: View {
                     )
                 }
 
+                if !candidate.customDeductionCandidates.isEmpty {
+                    Section {
+                        ForEach(candidate.customDeductionCandidates) { customCandidate in
+                            candidateSelectionRow(
+                                title: customCandidate.displayName,
+                                value: amountText(customCandidate.amountCandidate.value),
+                                confidenceText: confidenceText(customCandidate.amountCandidate),
+                                sourceText: customCandidate.amountCandidate.sourceText,
+                                isSelected: Binding(
+                                    get: { selectedCustomDeductionIDs.contains(customCandidate.id) },
+                                    set: { isSelected in
+                                        if isSelected {
+                                            selectedCustomDeductionIDs.insert(customCandidate.id)
+                                        } else {
+                                            selectedCustomDeductionIDs.remove(customCandidate.id)
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                    } header: {
+                        Text("勤務先固有の控除")
+                    } footer: {
+                        Text("反映して保存した項目は勤務先ごとに記憶し、次回のOCR候補に使います。")
+                    }
+                }
+
                 if candidate.deductionCandidate?.isInferred == true {
                     Section {
                         Label(
@@ -1021,9 +1390,9 @@ private struct OCRCandidateReviewView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("フォームに反映") {
-                        onApply(selectedFields, selectedEmployerID)
+                        onApply(selectedFields, selectedCustomDeductionIDs, selectedEmployerID)
                     }
-                    .disabled(selectedFields.isEmpty)
+                    .disabled(selectedFields.isEmpty && selectedCustomDeductionIDs.isEmpty)
                 }
             }
         }

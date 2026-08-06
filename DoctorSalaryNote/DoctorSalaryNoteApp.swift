@@ -7,6 +7,8 @@ struct DoctorSalaryNoteApp: App {
         let schema = Schema([
             Employer.self,
             PayRecord.self,
+            EmployerDeductionTemplate.self,
+            PayRecordDeductionItem.self,
             DocumentAttachment.self,
             AppSettings.self
         ])

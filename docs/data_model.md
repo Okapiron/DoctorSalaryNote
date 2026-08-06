@@ -101,41 +101,36 @@ grossAmount、netAmount、deductionAmountは、給与明細の基本3項目と�
 
 ## Entity: WorkplaceDeductionDefinition
 
-勤務先ごとの控除内訳項目の表示設定を表す。主要3項目のOCR検証後に実装する。
+勤務先ごとの控除内訳項目の表示設定を表す。
 
 ### Fields
 
 - id
 - workplaceId
-- standardCategory
 - displayName
+- ocrAliases
 - sortOrder
 - isActive
 - createdAt
 - updatedAt
 
-### standardCategory
-
-- incomeTax
-- residentTax
-- healthInsurance
-- employeePension
-- employmentInsurance
-- custom
-
 ### Notes
 
-所得税、住民税、健康保険、厚生年金、雇用保険は標準候補として用意する。
+控除項目には大分類を必須としない。給与明細に記載される「短期掛金」「厚生年金」「雇用保険」などの表示名を、その勤務先の項目名としてそのまま保存する。
+
+所得税と住民税は給与明細の共通固定項目として扱い、勤務先別設定には含めない。
+
+ocrAliasesは、同じ項目が帳票によって異なる表記になる場合に、OCRで同義語として探すために使う。
 
 勤務先ごとに不要な項目を非表示にできる。
 
-介護保険、組合費、財形、社宅費などはcustomとして追加できる。
+勤務先ごとに任意の項目を追加、名称変更、並べ替えできる。
 
 項目を非表示または名称変更しても、過去の給与明細に保存された値と表示名は変更しない。
 
 ## Entity: PayslipDeductionItem
 
-給与明細ごとの控除内訳を表す。主要3項目のOCR検証後に実装する。
+給与明細ごとの控除内訳を表す。
 
 ### Fields
 
@@ -145,7 +140,7 @@ grossAmount、netAmount、deductionAmountは、給与明細の基本3項目と�
 - displayNameSnapshot
 - amount
 - inputSource
-- ocrConfidence
+- sortOrder
 - createdAt
 - updatedAt
 
@@ -160,7 +155,9 @@ displayNameSnapshotは、勤務先側の項目名が後から変更・非表示�
 
 amountは未入力の項目をレコードなし、明示的な0円をamount = 0として区別する。
 
-ocrConfidenceはOCR候補の検証用情報であり、税務上の正しさを保証する値として表示しない。
+OCRの確からしさは保存前の候補確認に使い、保存後の控除項目には表示しない。
+
+控除合計が入力されている場合、所得税、住民税、勤務先固有項目を引いた残額を「その他（推定）」として扱う。残額が負になる場合は自動補正せず、入力内容の確認を促す。
 
 ## Entity: Document
 
@@ -319,7 +316,7 @@ netAmountまたはdeductionAmountが未入力の場合、その項目の集計�
 
 - CSV出力用の列定義
 - OCR結果の一時保存
-- 既存の所得税、住民税、社会保険料、その他控除フィールドからPayslipDeductionItemへの移行
+- 既存の社会保険料フィールドは、対象給与明細を次に編集したときに同名のPayslipDeductionItemへ段階的に移行する
 - 勤務先別の控除合計・控除内訳推移
 - バックアップファイルの形式
 - 税理士共有用エクスポート

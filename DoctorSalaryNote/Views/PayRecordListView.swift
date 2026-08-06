@@ -437,11 +437,17 @@ struct PayRecordDetailView: View {
                 if let residentTaxAmount = payRecord.residentTaxAmount {
                     amountRow("住民税", residentTaxAmount)
                 }
-                if let socialInsuranceAmount = payRecord.socialInsuranceAmount {
+
+                ForEach(payRecord.sortedDeductionItems) { item in
+                    amountRow(item.displayNameSnapshot, item.amount)
+                }
+
+                if payRecord.deductionItems.isEmpty,
+                   let socialInsuranceAmount = payRecord.socialInsuranceAmount {
                     amountRow("社会保険料", socialInsuranceAmount)
                 }
                 if let otherDeductionAmount = payRecord.otherDeductionAmount {
-                    amountRow("その他控除", otherDeductionAmount)
+                    amountRow(payRecord.deductionItems.isEmpty ? "その他控除" : "その他（推定）", otherDeductionAmount)
                 }
             }
 

@@ -14,6 +14,13 @@ enum OCRField: Hashable {
     case residentTaxAmount
 }
 
+struct OCRDeductionFieldSpec: Sendable {
+    let id: UUID
+    let templateKey: UUID?
+    let displayName: String
+    let keywords: [String]
+}
+
 enum OCRCandidateConfidence {
     case high
     case medium
@@ -72,6 +79,13 @@ struct OCRPaymentDateCandidate {
     }
 }
 
+struct OCRCustomDeductionCandidate: Identifiable {
+    let id: UUID
+    let templateKey: UUID?
+    let displayName: String
+    let amountCandidate: OCRAmountCandidate
+}
+
 struct OCRPayRecordCandidate: Identifiable {
     let id = UUID()
     let paymentDateCandidate: OCRPaymentDateCandidate?
@@ -80,6 +94,7 @@ struct OCRPayRecordCandidate: Identifiable {
     let deductionCandidate: OCRAmountCandidate?
     let incomeTaxCandidate: OCRAmountCandidate?
     let residentTaxCandidate: OCRAmountCandidate?
+    let customDeductionCandidates: [OCRCustomDeductionCandidate]
     let recognizedText: String
 
     var paymentYear: Int? {
@@ -116,7 +131,8 @@ struct OCRPayRecordCandidate: Identifiable {
             netCandidate != nil ||
             deductionCandidate != nil ||
             incomeTaxCandidate != nil ||
-            residentTaxCandidate != nil
+            residentTaxCandidate != nil ||
+            !customDeductionCandidates.isEmpty
     }
 }
 
@@ -143,7 +159,8 @@ enum OCRExtractionService {
 
     static func extractPayRecordCandidate(
         from fileURL: URL,
-        fileType: AttachmentFileType
+        fileType: AttachmentFileType,
+        deductionFieldSpecs: [OCRDeductionFieldSpec] = []
     ) async throws -> OCRPayRecordCandidate {
         try await Task.detached(priority: .userInitiated) {
             var lines: [RecognizedLine] = []
@@ -168,7 +185,7 @@ enum OCRExtractionService {
                 throw OCRError.recognitionFailed
             }
 
-            return makeCandidate(from: lines)
+            return makeCandidate(from: lines, deductionFieldSpecs: deductionFieldSpecs)
         }.value
     }
 
@@ -189,35 +206,41 @@ enum OCRExtractionService {
         }
     }
 
-    private enum AmountField: CaseIterable {
-        case gross
-        case net
-        case deduction
-        case incomeTax
-        case residentTax
-
-        var keywords: [String] {
-            switch self {
-            case .gross:
-                ["総支給額", "支給総額", "総支給", "支給額合計", "支給合計"]
-            case .net:
-                ["差引支給額", "銀行振込額", "振込支給額", "差引支給", "銀行振込", "振込額", "手取り"]
-            case .deduction:
-                ["控除額合計", "控除額計", "控除合計", "控除総額", "控除計"]
-            case .incomeTax:
-                ["所得税"]
-            case .residentTax:
-                ["住民税"]
-            }
+    private struct AmountField: Hashable {
+        enum Kind: Hashable {
+            case gross
+            case net
+            case deduction
+            case incomeTax
+            case residentTax
+            case custom(UUID)
         }
 
-        var minimumAmount: Int {
-            switch self {
-            case .gross, .net:
-                1_000
-            case .deduction, .incomeTax, .residentTax:
-                0
-            }
+        let kind: Kind
+        let keywords: [String]
+        let minimumAmount: Int
+
+        static let gross = AmountField(
+            kind: .gross,
+            keywords: ["総支給額", "支給総額", "総支給", "支給額合計", "支給合計"],
+            minimumAmount: 1_000
+        )
+        static let net = AmountField(
+            kind: .net,
+            keywords: ["差引支給額", "銀行振込額", "振込支給額", "差引支給", "銀行振込", "振込額", "手取り"],
+            minimumAmount: 1_000
+        )
+        static let deduction = AmountField(
+            kind: .deduction,
+            keywords: ["控除額合計", "控除額計", "控除合計", "控除総額", "控除計"],
+            minimumAmount: 0
+        )
+        static let incomeTax = AmountField(kind: .incomeTax, keywords: ["所得税"], minimumAmount: 0)
+        static let residentTax = AmountField(kind: .residentTax, keywords: ["住民税"], minimumAmount: 0)
+        static let fixedFields = [gross, net, deduction, incomeTax, residentTax]
+
+        static func custom(id: UUID, keywords: [String]) -> AmountField {
+            AmountField(kind: .custom(id), keywords: keywords, minimumAmount: 0)
         }
     }
 
@@ -233,7 +256,10 @@ enum OCRExtractionService {
         let isInferred: Bool
     }
 
-    private static func makeCandidate(from lines: [RecognizedLine]) -> OCRPayRecordCandidate {
+    private static func makeCandidate(
+        from lines: [RecognizedLine],
+        deductionFieldSpecs: [OCRDeductionFieldSpec]
+    ) -> OCRPayRecordCandidate {
         let meaningfulLines = lines.filter { !$0.normalizedText.isEmpty }
         let recognizedText = uniqueRecognizedText(from: meaningfulLines)
 
@@ -243,6 +269,23 @@ enum OCRExtractionService {
         var deduction = bestAmountCandidate(for: .deduction, in: meaningfulLines)
         let incomeTax = bestAmountCandidate(for: .incomeTax, in: meaningfulLines)
         let residentTax = bestAmountCandidate(for: .residentTax, in: meaningfulLines)
+        let customDeductions = deductionFieldSpecs.compactMap { spec -> OCRCustomDeductionCandidate? in
+            let keywords = Array(Set([spec.displayName] + spec.keywords)).filter { !$0.isEmpty }
+            guard !keywords.isEmpty,
+                  let amount = bestAmountCandidate(
+                    for: .custom(id: spec.id, keywords: keywords),
+                    in: meaningfulLines
+                  ) else {
+                return nil
+            }
+
+            return OCRCustomDeductionCandidate(
+                id: spec.id,
+                templateKey: spec.templateKey,
+                displayName: spec.displayName,
+                amountCandidate: makeAmountCandidate(from: amount)
+            )
+        }
 
         adjustConfidenceForArithmeticConsistency(
             gross: &gross,
@@ -269,6 +312,7 @@ enum OCRExtractionService {
             deductionCandidate: deduction.map(makeAmountCandidate),
             incomeTaxCandidate: incomeTax.map(makeAmountCandidate),
             residentTaxCandidate: residentTax.map(makeAmountCandidate),
+            customDeductionCandidates: customDeductions,
             recognizedText: recognizedText
         )
     }
@@ -553,7 +597,7 @@ enum OCRExtractionService {
                 continue
             }
 
-            if field == .gross,
+            if field.kind == .gross,
                ["課税支給", "課税対象"].contains(where: { text.contains($0) }) {
                 continue
             }
@@ -637,7 +681,7 @@ enum OCRExtractionService {
             if abs(lhs.score - rhs.score) > 0.02 {
                 return lhs.score < rhs.score
             }
-            if field == .gross {
+            if field.kind == .gross {
                 return lhs.value < rhs.value
             }
             return lhs.score < rhs.score
@@ -810,7 +854,7 @@ enum OCRExtractionService {
     private static func fieldPositions(
         in line: String
     ) -> [(field: AmountField, position: Int)] {
-        AmountField.allCases.compactMap { field in
+        AmountField.fixedFields.compactMap { field in
             let positions = field.keywords.compactMap { keyword in
                 line.range(of: keyword)?.lowerBound.utf16Offset(in: line)
             }
@@ -829,10 +873,10 @@ enum OCRExtractionService {
             $0 >= field.minimumAmount && $0 <= 100_000_000
         }
 
-        switch field {
+        switch field.kind {
         case .gross:
             return plausibleAmounts.max()
-        case .net, .deduction, .incomeTax, .residentTax:
+        case .net, .deduction, .incomeTax, .residentTax, .custom:
             return plausibleAmounts.last
         }
     }

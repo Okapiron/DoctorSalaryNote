@@ -115,6 +115,11 @@ enum ViewMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum DeductionItemInputSource: String, Codable {
+    case manual
+    case ocr
+}
+
 @Model
 final class Employer {
     var name: String
@@ -128,6 +133,9 @@ final class Employer {
 
     @Relationship(deleteRule: .nullify, inverse: \PayRecord.employer)
     var payRecords: [PayRecord] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \EmployerDeductionTemplate.employer)
+    var deductionTemplates: [EmployerDeductionTemplate] = []
 
     init(
         name: String,
@@ -179,6 +187,9 @@ final class PayRecord {
     var memo: String
     var createdAt: Date
     var updatedAt: Date
+
+    @Relationship(deleteRule: .cascade, inverse: \PayRecordDeductionItem.payRecord)
+    var deductionItems: [PayRecordDeductionItem] = []
 
     init(
         employer: Employer,
@@ -243,6 +254,106 @@ final class PayRecord {
         }
 
         return max(grossAmount - netAmount, 0)
+    }
+
+    var sortedDeductionItems: [PayRecordDeductionItem] {
+        deductionItems.sorted {
+            if $0.sortOrder != $1.sortOrder {
+                return $0.sortOrder < $1.sortOrder
+            }
+            return $0.displayNameSnapshot.localizedStandardCompare($1.displayNameSnapshot) == .orderedAscending
+        }
+    }
+}
+
+@Model
+final class EmployerDeductionTemplate {
+    var templateKey: UUID
+    var employer: Employer?
+    var displayName: String
+    var ocrAliasesRaw: String
+    var sortOrder: Int
+    var isActive: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        employer: Employer,
+        displayName: String,
+        ocrAliases: [String] = [],
+        sortOrder: Int = 0,
+        isActive: Bool = true,
+        templateKey: UUID = UUID(),
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.templateKey = templateKey
+        self.employer = employer
+        self.displayName = displayName
+        self.ocrAliasesRaw = ocrAliases.joined(separator: "\n")
+        self.sortOrder = sortOrder
+        self.isActive = isActive
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var ocrAliases: [String] {
+        get {
+            ocrAliasesRaw
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        set {
+            ocrAliasesRaw = newValue
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+        }
+    }
+
+    var ocrKeywords: [String] {
+        Array(Set([displayName] + ocrAliases)).filter { !$0.isEmpty }
+    }
+}
+
+@Model
+final class PayRecordDeductionItem {
+    var itemKey: UUID
+    var payRecord: PayRecord?
+    var templateKey: UUID?
+    var displayNameSnapshot: String
+    var amount: Int
+    var sortOrder: Int
+    var inputSourceRaw: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        payRecord: PayRecord,
+        templateKey: UUID?,
+        displayNameSnapshot: String,
+        amount: Int,
+        sortOrder: Int,
+        inputSource: DeductionItemInputSource = .manual,
+        itemKey: UUID = UUID(),
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.itemKey = itemKey
+        self.payRecord = payRecord
+        self.templateKey = templateKey
+        self.displayNameSnapshot = displayNameSnapshot
+        self.amount = amount
+        self.sortOrder = sortOrder
+        self.inputSourceRaw = inputSource.rawValue
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var inputSource: DeductionItemInputSource {
+        get { DeductionItemInputSource(rawValue: inputSourceRaw) ?? .manual }
+        set { inputSourceRaw = newValue.rawValue }
     }
 }
 

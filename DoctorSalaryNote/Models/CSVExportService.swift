@@ -32,6 +32,7 @@ enum CSVExportService {
                 "住民税",
                 "社会保険料",
                 "その他控除",
+                "控除内訳",
                 "メモ"
             ]
         ] + filteredRecords.map { record in
@@ -47,6 +48,7 @@ enum CSVExportService {
                 optionalAmountText(record.residentTaxAmount),
                 optionalAmountText(record.socialInsuranceAmount),
                 optionalAmountText(record.otherDeductionAmount),
+                deductionItemsText(record),
                 record.memo
             ]
         }
@@ -69,6 +71,12 @@ enum CSVExportService {
 
     private static func optionalAmountText(_ amount: Int?) -> String {
         amount.map(String.init) ?? ""
+    }
+
+    private static func deductionItemsText(_ record: PayRecord) -> String {
+        record.sortedDeductionItems
+            .map { "\($0.displayNameSnapshot):\($0.amount)" }
+            .joined(separator: ";")
     }
 
     private static func escapedCSVField(_ field: String) -> String {
