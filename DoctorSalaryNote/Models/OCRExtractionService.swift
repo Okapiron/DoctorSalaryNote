@@ -660,6 +660,15 @@ enum OCRExtractionService {
                 candidates.append(spatialCandidate)
             }
 
+            if field.kind == .deduction,
+               field.keywords.contains(where: { line.normalizedText.contains($0) }),
+               let adjacentCandidate = adjacentDeductionAmountCandidate(
+                labelLine: line,
+                in: lines
+               ) {
+                candidates.append(adjacentCandidate)
+            }
+
             if let verticalCandidate = verticalAmountCandidate(
                 for: field,
                 labelLine: line,
@@ -807,6 +816,59 @@ enum OCRExtractionService {
             }
             return lhs.value < rhs.value
         }
+    }
+
+    private static func adjacentDeductionAmountCandidate(
+        labelLine: RecognizedLine,
+        in lines: [RecognizedLine]
+    ) -> ScoredAmount? {
+        guard labelLine.source == .vision,
+              let labelBox = labelLine.boundingBox else {
+            return nil
+        }
+
+        let candidates = lines.compactMap { line -> ScoredAmount? in
+            guard line.source == .vision,
+                  line.pageIndex == labelLine.pageIndex,
+                  line.text != labelLine.text,
+                  let box = line.boundingBox,
+                  let amount = preferredAmount(
+                    from: amountMatches(in: line.normalizedText, minimum: 0).map(\.value),
+                    for: .deduction
+                  ) else {
+                return nil
+            }
+
+            let isToRight = abs(box.midY - labelBox.midY) <= 0.050 &&
+                box.minX >= labelBox.maxX - 0.015
+            let verticalDistance = labelBox.midY - box.midY
+            let horizontalOverlap = min(labelBox.maxX, box.maxX) - max(labelBox.minX, box.minX)
+            let isDirectlyBelow = (0.010...0.100).contains(verticalDistance) &&
+                (horizontalOverlap >= -0.015 || abs(box.midX - labelBox.midX) <= 0.18)
+
+            guard isToRight || isDirectlyBelow else {
+                return nil
+            }
+
+            let distancePenalty: Double
+            let baseScore: Double
+            if isToRight {
+                baseScore = 0.97
+                distancePenalty = min(0.14, max(0, box.minX - labelBox.maxX) * 0.18)
+            } else {
+                baseScore = 0.91
+                distancePenalty = min(0.16, verticalDistance * 0.9 + abs(box.midX - labelBox.midX) * 0.25)
+            }
+
+            return ScoredAmount(
+                value: amount,
+                score: (baseScore - distancePenalty) * min(labelLine.confidence, line.confidence),
+                sourceText: "\(labelLine.text) / \(line.text)",
+                isInferred: false
+            )
+        }
+
+        return candidates.max { $0.score < $1.score }
     }
 
     private static func expandedLabelText(

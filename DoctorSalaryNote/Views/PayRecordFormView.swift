@@ -84,6 +84,7 @@ struct PayRecordFormView: View {
     @State private var availableOCRCandidate: OCRPayRecordCandidate?
     @State private var ocrCandidateForReview: OCRPayRecordCandidate?
     @State private var pendingOCRApplication: PendingOCRApplication?
+    @FocusState private var isTextInputFocused: Bool
 
     init(
         payRecord: PayRecord? = nil,
@@ -156,6 +157,20 @@ struct PayRecordFormView: View {
                     Label(validationMessage, systemImage: "exclamationmark.circle.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.red)
+                }
+            }
+
+            if payRecord == nil {
+                Section {
+                    Button {
+                        isTextInputFocused = false
+                        isShowingInitialImportOptions = true
+                    } label: {
+                        Label("書類から取り込む", systemImage: "doc.viewfinder")
+                            .font(.body.weight(.semibold))
+                    }
+                } footer: {
+                    Text("カメラ、写真、PDFから給与明細を読み取り、入力候補をフォームへ反映します。")
                 }
             }
 
@@ -257,6 +272,7 @@ struct PayRecordFormView: View {
             Section("メモ") {
                 TextEditor(text: $memo)
                     .frame(minHeight: 120)
+                    .focused($isTextInputFocused)
             }
 
             Section("添付書類") {
@@ -298,6 +314,10 @@ struct PayRecordFormView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture {
+            isTextInputFocused = false
+        }
         .navigationTitle(payRecord == nil ? "給与明細追加" : "給与明細編集")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -308,6 +328,13 @@ struct PayRecordFormView: View {
 
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存", action: save)
+            }
+
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完了") {
+                    isTextInputFocused = false
+                }
             }
         }
         .sheet(isPresented: $isAddingEmployer) {
@@ -530,6 +557,7 @@ struct PayRecordFormView: View {
                 }
             ))
             .keyboardType(.numberPad)
+            .focused($isTextInputFocused)
             .multilineTextAlignment(.trailing)
             .font(.body.monospacedDigit())
             .frame(maxWidth: 180)
@@ -540,12 +568,14 @@ struct PayRecordFormView: View {
         HStack(spacing: 8) {
             TextField("項目名", text: draft.name)
                 .textInputAutocapitalization(.never)
+                .focused($isTextInputFocused)
 
             TextField("0", text: Binding(
                 get: { draft.amountText.wrappedValue },
                 set: { draft.amountText.wrappedValue = groupedAmountText(from: $0) }
             ))
             .keyboardType(.numberPad)
+            .focused($isTextInputFocused)
             .multilineTextAlignment(.trailing)
             .font(.body.monospacedDigit())
             .frame(maxWidth: 120)
