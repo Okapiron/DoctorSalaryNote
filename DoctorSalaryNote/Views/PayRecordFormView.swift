@@ -5,15 +5,6 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-private struct PendingOCRApplication {
-    let candidate: OCRPayRecordCandidate
-    let selectedFields: Set<OCRField>
-    let amountOverrides: [OCRField: Int]
-    let selectedCustomDeductionIDs: Set<UUID>
-    let customDeductionAmountOverrides: [UUID: Int]
-    let employerID: PersistentIdentifier?
-}
-
 private struct DeductionDraft: Identifiable {
     let id: UUID
     var templateKey: UUID?
@@ -83,9 +74,8 @@ struct PayRecordFormView: View {
     @State private var pendingDocumentFileURL: URL?
     @State private var isRunningOCR = false
     @State private var ocrStatusMessage: String?
-    @State private var availableOCRCandidate: OCRPayRecordCandidate?
-    @State private var ocrCandidateForReview: OCRPayRecordCandidate?
-    @State private var pendingOCRApplication: PendingOCRApplication?
+    @State private var saveWarningMessage: String?
+    @State private var isShowingSaveWarning = false
     @FocusState private var isTextInputFocused: Bool
 
     init(
@@ -339,7 +329,9 @@ struct PayRecordFormView: View {
             }
 
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存", action: save)
+                Button("保存") {
+                    save()
+                }
             }
 
             ToolbarItemGroup(placement: .keyboard) {
@@ -378,36 +370,6 @@ struct PayRecordFormView: View {
                 handleCapturedImage(image)
             }
             .ignoresSafeArea()
-        }
-        .sheet(item: $ocrCandidateForReview, onDismiss: applyPendingOCRApplication) { candidate in
-            OCRCandidateReviewView(
-                candidate: candidate,
-                employers: selectableEmployers,
-                suggestedEmployerID: suggestedEmployer(for: candidate)?.persistentModelID,
-                fileURL: pendingDocumentFileURL,
-                fileType: pendingDocumentFileType,
-                fileTitle: pendingDocumentOriginalFileName ?? pendingDocumentType.label,
-                onCancel: {
-                    pendingOCRApplication = nil
-                    ocrCandidateForReview = nil
-                },
-                onApply: {
-                    selectedFields,
-                    amountOverrides,
-                    selectedCustomDeductionIDs,
-                    customDeductionAmountOverrides,
-                    employerID in
-                    pendingOCRApplication = PendingOCRApplication(
-                        candidate: candidate,
-                        selectedFields: selectedFields,
-                        amountOverrides: amountOverrides,
-                        selectedCustomDeductionIDs: selectedCustomDeductionIDs,
-                        customDeductionAmountOverrides: customDeductionAmountOverrides,
-                        employerID: employerID
-                    )
-                    ocrCandidateForReview = nil
-                }
-            )
         }
         .onAppear {
             if payRecord == nil,
@@ -466,6 +428,14 @@ struct PayRecordFormView: View {
         } message: {
             Text(validationMessage ?? "入力内容を確認してください。")
         }
+        .alert("計算結果を確認してください", isPresented: $isShowingSaveWarning) {
+            Button("入力に戻る", role: .cancel) {}
+            Button("このまま保存") {
+                save(ignoringWarnings: true)
+            }
+        } message: {
+            Text(saveWarningMessage ?? "金額の整合性を確認してください。")
+        }
     }
 
     private func presentImportOptions() {
@@ -493,16 +463,7 @@ struct PayRecordFormView: View {
             } else if let ocrStatusMessage {
                 Text(ocrStatusMessage)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let availableOCRCandidate {
-                Button {
-                    presentOCRCandidate(availableOCRCandidate)
-                } label: {
-                    Label("読み取り結果を確認", systemImage: "doc.text.magnifyingglass")
-                }
-                .buttonStyle(.borderless)
+                    .foregroundStyle(ocrStatusMessage.contains("要確認") ? Color.orange : Color.secondary)
             }
         }
 
@@ -643,6 +604,38 @@ struct PayRecordFormView: View {
         return deductionAmount - incomeTax - residentTax - customTotal
     }
 
+    private func amountConsistencyWarnings(
+        grossAmount: Int,
+        netAmount: Int?,
+        deductionAmount: Int?
+    ) -> [String] {
+        var warnings: [String] = []
+
+        if let netAmount {
+            let calculatedDeduction = grossAmount - netAmount
+            if calculatedDeduction < 0 {
+                warnings.append(
+                    "手取りが額面を \((-calculatedDeduction).currencyText) 上回っています。"
+                )
+            } else if let deductionAmount,
+                      calculatedDeduction != deductionAmount {
+                let difference = abs(calculatedDeduction - deductionAmount)
+                warnings.append(
+                    "額面から手取りを引いた金額は \(calculatedDeduction.currencyText) ですが、控除合計は \(deductionAmount.currencyText) です。差額は \(difference.currencyText) です。"
+                )
+            }
+        }
+
+        if let estimatedOtherDeduction,
+           estimatedOtherDeduction < 0 {
+            warnings.append(
+                "所得税・住民税・控除内訳の合計が、控除合計を \((-estimatedOtherDeduction).currencyText) 上回っています。"
+            )
+        }
+
+        return warnings
+    }
+
     private func documentLabel(_ document: DocumentAttachment) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -659,7 +652,7 @@ struct PayRecordFormView: View {
         }
     }
 
-    private func save() {
+    private func save(ignoringWarnings: Bool = false) {
         guard let selectedEmployer else {
             showValidation("勤務先を選択してください。")
             return
@@ -685,6 +678,20 @@ struct PayRecordFormView: View {
 
         guard let validatedDeductionDrafts = validatedDeductionDrafts() else {
             return
+        }
+
+        if !ignoringWarnings {
+            let warnings = amountConsistencyWarnings(
+                grossAmount: grossAmount,
+                netAmount: netAmount,
+                deductionAmount: deductionAmount
+            )
+            if !warnings.isEmpty {
+                saveWarningMessage = warnings.joined(separator: "\n\n") +
+                    "\n\n入力内容に問題がなければ、このまま保存できます。"
+                isShowingSaveWarning = true
+                return
+            }
         }
 
         let resolvedOtherDeductionAmount: Int?
@@ -923,8 +930,6 @@ struct PayRecordFormView: View {
         pendingDocumentFileSize = storedFile.fileSize
         pendingDocumentFileType = storedFile.fileType
         pendingDocumentFileURL = newFileURL
-        availableOCRCandidate = nil
-        ocrCandidateForReview = nil
         validationMessage = nil
         startOCRIfNeeded(for: newFileURL, fileType: storedFile.fileType)
     }
@@ -953,18 +958,7 @@ struct PayRecordFormView: View {
 
                     isRunningOCR = false
                     if candidate.hasUsableValue {
-                        availableOCRCandidate = candidate
-                        ocrStatusMessage = "入力候補を見つけました。「読み取り結果を確認」からフォームへ反映できます。"
-
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(350))
-                            guard pendingDocumentFileURL == fileURL,
-                                  availableOCRCandidate?.id == candidate.id,
-                                  ocrCandidateForReview == nil else {
-                                return
-                            }
-                            presentOCRCandidate(candidate)
-                        }
+                        applyOCRCandidate(candidate)
                     } else {
                         ocrStatusMessage = "文字は読み取りましたが、支給年月や金額の候補を特定できませんでした。必要な項目は手入力してください。"
                     }
@@ -984,57 +978,55 @@ struct PayRecordFormView: View {
     }
 
     private func applyOCRCandidate(
-        _ candidate: OCRPayRecordCandidate,
-        selectedFields: Set<OCRField>,
-        amountOverrides: [OCRField: Int],
-        selectedCustomDeductionIDs: Set<UUID>,
-        customDeductionAmountOverrides: [UUID: Int],
-        employerID: PersistentIdentifier?
+        _ candidate: OCRPayRecordCandidate
     ) {
-        if selectedFields.contains(.employer),
-           let employerID {
+        var appliedFields = Set<OCRField>()
+
+        if let employerID = suggestedEmployer(for: candidate)?.persistentModelID {
             selectedEmployerID = employerID
+            appliedFields.insert(.employer)
         }
 
-        if selectedFields.contains(.paymentDate),
-           let paymentYear = candidate.paymentYear {
+        if let paymentYear = candidate.paymentYear {
             self.paymentYear = paymentYear
+            appliedFields.insert(.paymentDate)
         }
 
-        if selectedFields.contains(.paymentDate),
-           let paymentMonth = candidate.paymentMonth {
+        if let paymentMonth = candidate.paymentMonth {
             self.paymentMonth = paymentMonth
+            appliedFields.insert(.paymentDate)
         }
 
-        if selectedFields.contains(.grossAmount),
-           let grossAmount = amountOverrides[.grossAmount] ?? candidate.grossAmount {
+        if let grossAmount = candidate.grossAmount {
             grossAmountText = grossAmount.formText
+            appliedFields.insert(.grossAmount)
         }
 
-        if selectedFields.contains(.netAmount),
-           let netAmount = amountOverrides[.netAmount] ?? candidate.netAmount {
+        if let netAmount = candidate.netAmount {
             netAmountText = netAmount.formText
+            appliedFields.insert(.netAmount)
         }
 
-        if selectedFields.contains(.deductionAmount),
-           let deductionAmount = amountOverrides[.deductionAmount] ?? candidate.deductionAmount {
+        if let deductionAmount = candidate.deductionAmount {
             deductionAmountText = deductionAmount.formText
+            appliedFields.insert(.deductionAmount)
         }
 
-        if selectedFields.contains(.incomeTaxAmount),
-           let incomeTaxAmount = amountOverrides[.incomeTaxAmount] ?? candidate.incomeTaxAmount {
+        if let incomeTaxAmount = candidate.incomeTaxAmount {
             incomeTaxAmountText = incomeTaxAmount.formText
+            appliedFields.insert(.incomeTaxAmount)
         }
 
-        if selectedFields.contains(.residentTaxAmount),
-           let residentTaxAmount = amountOverrides[.residentTaxAmount] ?? candidate.residentTaxAmount {
+        if let residentTaxAmount = candidate.residentTaxAmount {
             residentTaxAmountText = residentTaxAmount.formText
+            appliedFields.insert(.residentTaxAmount)
         }
 
-        for customCandidate in candidate.customDeductionCandidates
-            where selectedCustomDeductionIDs.contains(customCandidate.id) {
-            let amount = customDeductionAmountOverrides[customCandidate.id] ??
-                customCandidate.amountCandidate.value
+        let customCandidates = candidate.customDeductionCandidates.filter {
+            $0.amountCandidate.value > 0
+        }
+        for customCandidate in customCandidates {
+            let amount = customCandidate.amountCandidate.value
             if let index = deductionDrafts.firstIndex(where: { draft in
                 let matchesTemplate = customCandidate.templateKey.map {
                     draft.templateKey == $0
@@ -1057,28 +1049,46 @@ struct PayRecordFormView: View {
         }
 
         validationMessage = nil
-        let appliedFields = appliedFieldLabels(
-            for: selectedFields,
-            customDeductionCount: selectedCustomDeductionIDs.count
+        let appliedFieldText = appliedFieldLabels(
+            for: appliedFields,
+            customDeductionCount: customCandidates.count
         )
-        ocrStatusMessage = "フォームに反映しました（\(appliedFields)）。内容を照合し、右上の「保存」を押してください。"
+        let reviewPrefix = candidateContainsValuesRequiringReview(candidate) ? "要確認の候補を含みます。" : ""
+        ocrStatusMessage = "書類から自動入力しました（\(appliedFieldText)）。\(reviewPrefix)原本と照合してから保存してください。"
     }
 
-    private func applyPendingOCRApplication() {
-        guard let application = pendingOCRApplication else {
-            return
+    private func candidateContainsValuesRequiringReview(
+        _ candidate: OCRPayRecordCandidate
+    ) -> Bool {
+        if let dateCandidate = candidate.paymentDateCandidate,
+           isLowConfidence(dateCandidate.confidence) {
+            return true
         }
 
-        applyOCRCandidate(
-            application.candidate,
-            selectedFields: application.selectedFields,
-            amountOverrides: application.amountOverrides,
-            selectedCustomDeductionIDs: application.selectedCustomDeductionIDs,
-            customDeductionAmountOverrides: application.customDeductionAmountOverrides,
-            employerID: application.employerID
-        )
-        availableOCRCandidate = nil
-        pendingOCRApplication = nil
+        let amountCandidates = [
+            candidate.grossCandidate,
+            candidate.netCandidate,
+            candidate.deductionCandidate,
+            candidate.incomeTaxCandidate,
+            candidate.residentTaxCandidate
+        ].compactMap { $0 }
+        if amountCandidates.contains(where: {
+            $0.isInferred || isLowConfidence($0.confidence)
+        }) {
+            return true
+        }
+
+        return candidate.customDeductionCandidates.contains {
+            $0.amountCandidate.value > 0 &&
+                ($0.amountCandidate.isInferred || isLowConfidence($0.amountCandidate.confidence))
+        }
+    }
+
+    private func isLowConfidence(_ confidence: OCRCandidateConfidence) -> Bool {
+        if case .low = confidence {
+            return true
+        }
+        return false
     }
 
     private func appliedFieldLabels(
@@ -1102,17 +1112,6 @@ struct PayRecordFormView: View {
             resolvedLabels.append("控除内訳\(customDeductionCount)件")
         }
         return resolvedLabels.joined(separator: "・")
-    }
-
-    private func presentOCRCandidate(_ candidate: OCRPayRecordCandidate) {
-        ocrCandidateForReview = nil
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(100))
-            guard availableOCRCandidate?.id == candidate.id else {
-                return
-            }
-            ocrCandidateForReview = candidate
-        }
     }
 
     private func suggestedEmployer(for candidate: OCRPayRecordCandidate) -> Employer? {
