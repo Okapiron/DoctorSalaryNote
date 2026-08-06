@@ -165,8 +165,7 @@ struct PayRecordFormView: View {
             if payRecord == nil {
                 Section {
                     Button {
-                        isTextInputFocused = false
-                        isShowingInitialImportOptions = true
+                        presentImportOptions()
                     } label: {
                         Label("書類から取り込む", systemImage: "doc.viewfinder")
                             .font(.body.weight(.semibold))
@@ -324,8 +323,12 @@ struct PayRecordFormView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .onTapGesture {
-            isTextInputFocused = false
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isTextInputFocused = false
+                }
         }
         .navigationTitle(payRecord == nil ? "給与明細追加" : "給与明細編集")
         .toolbar {
@@ -462,6 +465,14 @@ struct PayRecordFormView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(validationMessage ?? "入力内容を確認してください。")
+        }
+    }
+
+    private func presentImportOptions() {
+        isTextInputFocused = false
+        Task { @MainActor in
+            await Task.yield()
+            isShowingInitialImportOptions = true
         }
     }
 

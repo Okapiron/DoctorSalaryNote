@@ -281,6 +281,12 @@ enum OCRExtractionService {
                 return nil
             }
 
+            // Generic zero-value rows add noise to the review screen. Employer-specific
+            // templates remain visible because zero can be a meaningful monthly value.
+            if spec.templateKey == nil, amount.value == 0 {
+                return nil
+            }
+
             return OCRCustomDeductionCandidate(
                 id: spec.id,
                 templateKey: spec.templateKey,
@@ -299,6 +305,13 @@ enum OCRExtractionService {
                 }
                 return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
             }
+
+        reconcileArithmeticConsistency(
+            gross: &gross,
+            net: &net,
+            deduction: &deduction,
+            lines: meaningfulLines
+        )
 
         adjustConfidenceForArithmeticConsistency(
             gross: &gross,
@@ -634,10 +647,15 @@ enum OCRExtractionService {
         var candidates: [ScoredAmount] = []
 
         for (index, line) in lines.enumerated() {
-            let text = expandedLabelText(for: line, in: lines)
-            guard let keyword = field.keywords
-                .filter({ text.contains($0) })
-                .max(by: { $0.count < $1.count }) else {
+            let directText = line.normalizedText
+            let directKeyword = matchingKeyword(for: field, in: directText)
+            let mayAnchorExpandedLabel = directKeyword == nil &&
+                containsJapaneseText(directText) &&
+                amountMatches(in: directText, minimum: 0).isEmpty
+            let text = mayAnchorExpandedLabel
+                ? expandedLabelText(for: line, in: lines)
+                : directText
+            guard matchingKeyword(for: field, in: text) != nil else {
                 continue
             }
 
@@ -647,8 +665,10 @@ enum OCRExtractionService {
             }
 
             let confidence = line.source == .embeddedPDF ? 0.99 : line.confidence
-            if let keywordRange = text.range(of: keyword) {
-                let trailingText = String(text[keywordRange.upperBound...])
+            if let directKeyword,
+               let keywordRange = directText.range(of: directKeyword),
+               !isDeductionMetadataLine(directText, field: field) {
+                let trailingText = String(directText[keywordRange.upperBound...])
                 for (matchIndex, match) in amountMatches(
                     in: trailingText,
                     minimum: field.minimumAmount
@@ -698,6 +718,12 @@ enum OCRExtractionService {
                 candidates.append(tableCandidate)
             }
 
+            // Vision results are ordered by the whole page, not by table columns.
+            // Sequential fallback is therefore only reliable for embedded PDF text.
+            guard line.source == .embeddedPDF else {
+                continue
+            }
+
             let followingLines = lines.dropFirst(index + 1).prefix(3)
             for (offset, followingLine) in followingLines.enumerated() {
                 guard followingLine.pageIndex == line.pageIndex,
@@ -713,12 +739,7 @@ enum OCRExtractionService {
                     continue
                 }
 
-                let baseScore: Double
-                if field.kind == .deduction {
-                    baseScore = offset == 0 ? 0.97 : 0.55
-                } else {
-                    baseScore = offset == 0 ? 0.68 : 0.54
-                }
+                let baseScore = offset == 0 ? 0.68 : 0.54
                 candidates.append(
                     ScoredAmount(
                         value: amount,
@@ -744,6 +765,88 @@ enum OCRExtractionService {
             }
             return lhs.score < rhs.score
         }
+    }
+
+    private static func matchingKeyword(
+        for field: AmountField,
+        in text: String
+    ) -> String? {
+        field.keywords
+            .filter { text.contains($0) }
+            .max { $0.count < $1.count }
+    }
+
+    private static func containsJapaneseText(_ text: String) -> Bool {
+        text.range(
+            of: #"[一-龯々ぁ-んァ-ヶー]"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func isDeductionMetadataLine(
+        _ text: String,
+        field: AmountField
+    ) -> Bool {
+        guard case .custom = field.kind else {
+            return false
+        }
+
+        return ["等級", "標準報酬", "標準月額", "報酬月額"].contains {
+            text.contains($0)
+        }
+    }
+
+    private static func reconcileArithmeticConsistency(
+        gross: inout ScoredAmount?,
+        net: inout ScoredAmount?,
+        deduction: inout ScoredAmount?,
+        lines: [RecognizedLine]
+    ) {
+        if let gross, let deduction, gross.value >= deduction.value {
+            let expectedNet = gross.value - deduction.value
+            if net?.value != expectedNet,
+               let recognizedNet = exactRecognizedAmount(expectedNet, in: lines) {
+                net = recognizedNet
+            }
+        }
+
+        if let gross, let net, gross.value >= net.value {
+            let expectedDeduction = gross.value - net.value
+            if deduction?.value != expectedDeduction,
+               let recognizedDeduction = exactRecognizedAmount(expectedDeduction, in: lines) {
+                deduction = recognizedDeduction
+            }
+        }
+
+        if let net, let deduction {
+            let expectedGross = net.value + deduction.value
+            if gross?.value != expectedGross,
+               let recognizedGross = exactRecognizedAmount(expectedGross, in: lines) {
+                gross = recognizedGross
+            }
+        }
+    }
+
+    private static func exactRecognizedAmount(
+        _ expectedValue: Int,
+        in lines: [RecognizedLine]
+    ) -> ScoredAmount? {
+        let matches = lines.compactMap { line -> ScoredAmount? in
+            guard amountMatches(in: line.normalizedText, minimum: 0)
+                .contains(where: { $0.value == expectedValue }) else {
+                return nil
+            }
+
+            let confidence = line.source == .embeddedPDF ? 0.99 : line.confidence
+            return ScoredAmount(
+                value: expectedValue,
+                score: 0.98 * confidence,
+                sourceText: "額面・手取り・控除の整合 / \(line.text)",
+                isInferred: false
+            )
+        }
+
+        return matches.max { $0.score < $1.score }
     }
 
     private static func spatialAmountCandidate(
@@ -821,7 +924,7 @@ enum OCRExtractionService {
             let distancePenalty = min(0.18, verticalDistance * 1.5 + horizontalDistance)
             return ScoredAmount(
                 value: amount,
-                score: (0.94 - distancePenalty) * min(labelLine.confidence, line.confidence),
+                score: (1.08 - distancePenalty) * min(labelLine.confidence, line.confidence),
                 sourceText: "\(labelLine.text) / \(line.text)",
                 isInferred: false
             )
@@ -860,8 +963,10 @@ enum OCRExtractionService {
                 box.minX >= labelBox.maxX - 0.015
             let verticalDistance = labelBox.midY - box.midY
             let horizontalOverlap = min(labelBox.maxX, box.maxX) - max(labelBox.minX, box.minX)
+            let columnTolerance = max(0.045, labelBox.width * 0.75)
             let isDirectlyBelow = (0.010...0.100).contains(verticalDistance) &&
-                (horizontalOverlap >= -0.015 || abs(box.midX - labelBox.midX) <= 0.18)
+                horizontalOverlap >= -0.008 &&
+                abs(box.midX - labelBox.midX) <= columnTolerance
 
             guard isToRight || isDirectlyBelow else {
                 return nil
