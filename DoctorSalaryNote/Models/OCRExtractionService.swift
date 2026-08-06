@@ -10,6 +10,8 @@ enum OCRField: Hashable {
     case grossAmount
     case netAmount
     case deductionAmount
+    case incomeTaxAmount
+    case residentTaxAmount
 }
 
 enum OCRCandidateConfidence {
@@ -76,6 +78,8 @@ struct OCRPayRecordCandidate: Identifiable {
     let grossCandidate: OCRAmountCandidate?
     let netCandidate: OCRAmountCandidate?
     let deductionCandidate: OCRAmountCandidate?
+    let incomeTaxCandidate: OCRAmountCandidate?
+    let residentTaxCandidate: OCRAmountCandidate?
     let recognizedText: String
 
     var paymentYear: Int? {
@@ -98,11 +102,21 @@ struct OCRPayRecordCandidate: Identifiable {
         deductionCandidate?.value
     }
 
+    var incomeTaxAmount: Int? {
+        incomeTaxCandidate?.value
+    }
+
+    var residentTaxAmount: Int? {
+        residentTaxCandidate?.value
+    }
+
     var hasUsableValue: Bool {
         paymentDateCandidate != nil ||
             grossCandidate != nil ||
             netCandidate != nil ||
-            deductionCandidate != nil
+            deductionCandidate != nil ||
+            incomeTaxCandidate != nil ||
+            residentTaxCandidate != nil
     }
 }
 
@@ -179,6 +193,8 @@ enum OCRExtractionService {
         case gross
         case net
         case deduction
+        case incomeTax
+        case residentTax
 
         var keywords: [String] {
             switch self {
@@ -187,7 +203,11 @@ enum OCRExtractionService {
             case .net:
                 ["差引支給額", "銀行振込額", "振込支給額", "差引支給", "銀行振込", "振込額", "手取り"]
             case .deduction:
-                ["控除額合計", "控除合計", "控除総額", "控除計"]
+                ["控除額合計", "控除額計", "控除合計", "控除総額", "控除計"]
+            case .incomeTax:
+                ["所得税"]
+            case .residentTax:
+                ["住民税"]
             }
         }
 
@@ -195,7 +215,7 @@ enum OCRExtractionService {
             switch self {
             case .gross, .net:
                 1_000
-            case .deduction:
+            case .deduction, .incomeTax, .residentTax:
                 0
             }
         }
@@ -221,6 +241,8 @@ enum OCRExtractionService {
         var gross = bestAmountCandidate(for: .gross, in: meaningfulLines)
         var net = bestAmountCandidate(for: .net, in: meaningfulLines)
         var deduction = bestAmountCandidate(for: .deduction, in: meaningfulLines)
+        let incomeTax = bestAmountCandidate(for: .incomeTax, in: meaningfulLines)
+        let residentTax = bestAmountCandidate(for: .residentTax, in: meaningfulLines)
 
         adjustConfidenceForArithmeticConsistency(
             gross: &gross,
@@ -245,6 +267,8 @@ enum OCRExtractionService {
             grossCandidate: gross.map(makeAmountCandidate),
             netCandidate: net.map(makeAmountCandidate),
             deductionCandidate: deduction.map(makeAmountCandidate),
+            incomeTaxCandidate: incomeTax.map(makeAmountCandidate),
+            residentTaxCandidate: residentTax.map(makeAmountCandidate),
             recognizedText: recognizedText
         )
     }
@@ -522,7 +546,7 @@ enum OCRExtractionService {
         var candidates: [ScoredAmount] = []
 
         for (index, line) in lines.enumerated() {
-            let text = line.normalizedText
+            let text = expandedLabelText(for: line, in: lines)
             guard let keyword = field.keywords
                 .filter({ text.contains($0) })
                 .max(by: { $0.count < $1.count }) else {
@@ -558,6 +582,14 @@ enum OCRExtractionService {
                 in: lines
             ) {
                 candidates.append(spatialCandidate)
+            }
+
+            if let verticalCandidate = verticalAmountCandidate(
+                for: field,
+                labelLine: line,
+                in: lines
+            ) {
+                candidates.append(verticalCandidate)
             }
 
             if let tableCandidate = tableAmountCandidate(
@@ -652,6 +684,90 @@ enum OCRExtractionService {
         return candidates.max { $0.score < $1.score }
     }
 
+    private static func verticalAmountCandidate(
+        for field: AmountField,
+        labelLine: RecognizedLine,
+        in lines: [RecognizedLine]
+    ) -> ScoredAmount? {
+        guard labelLine.source == .vision,
+              let labelBox = labelLine.boundingBox else {
+            return nil
+        }
+
+        let candidates = lines.compactMap { line -> ScoredAmount? in
+            guard line.source == .vision,
+                  line.pageIndex == labelLine.pageIndex,
+                  line.text != labelLine.text,
+                  let box = line.boundingBox else {
+                return nil
+            }
+
+            let verticalDistance = labelBox.midY - box.midY
+            let horizontalDistance = abs(labelBox.midX - box.midX)
+            guard (0.012...0.060).contains(verticalDistance),
+                  horizontalDistance <= 0.055,
+                  let amount = preferredAmount(
+                    from: amountMatches(
+                        in: line.normalizedText,
+                        minimum: field.minimumAmount
+                    ).map(\.value),
+                    for: field
+                  ) else {
+                return nil
+            }
+
+            let distancePenalty = min(0.18, verticalDistance * 1.5 + horizontalDistance)
+            return ScoredAmount(
+                value: amount,
+                score: (0.94 - distancePenalty) * min(labelLine.confidence, line.confidence),
+                sourceText: "\(labelLine.text) / \(line.text)",
+                isInferred: false
+            )
+        }
+
+        return candidates.max { lhs, rhs in
+            if abs(lhs.score - rhs.score) > 0.02 {
+                return lhs.score < rhs.score
+            }
+            return lhs.value < rhs.value
+        }
+    }
+
+    private static func expandedLabelText(
+        for labelLine: RecognizedLine,
+        in lines: [RecognizedLine]
+    ) -> String {
+        guard labelLine.source == .vision,
+              let labelBox = labelLine.boundingBox else {
+            return labelLine.normalizedText
+        }
+
+        let neighboringLines = lines.filter { line in
+            guard line.source == .vision,
+                  line.pageIndex == labelLine.pageIndex,
+                  let box = line.boundingBox else {
+                return false
+            }
+
+            return abs(box.midY - labelBox.midY) <= 0.028 &&
+                abs(box.midX - labelBox.midX) <= 0.045
+        }
+        .sorted { lhs, rhs in
+            guard let lhsBox = lhs.boundingBox,
+                  let rhsBox = rhs.boundingBox else {
+                return lhs.text < rhs.text
+            }
+            if abs(lhsBox.midY - rhsBox.midY) > 0.006 {
+                return lhsBox.midY > rhsBox.midY
+            }
+            return lhsBox.minX < rhsBox.minX
+        }
+
+        return neighboringLines
+            .map(\.normalizedText)
+            .joined()
+    }
+
     private static func tableAmountCandidate(
         for field: AmountField,
         headerLine: RecognizedLine,
@@ -716,7 +832,7 @@ enum OCRExtractionService {
         switch field {
         case .gross:
             return plausibleAmounts.max()
-        case .net, .deduction:
+        case .net, .deduction, .incomeTax, .residentTax:
             return plausibleAmounts.last
         }
     }

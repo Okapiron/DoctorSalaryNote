@@ -714,6 +714,16 @@ struct PayRecordFormView: View {
             deductionAmountText = deductionAmount.formText
         }
 
+        if selectedFields.contains(.incomeTaxAmount),
+           let incomeTaxAmount = candidate.incomeTaxAmount {
+            incomeTaxAmountText = incomeTaxAmount.formText
+        }
+
+        if selectedFields.contains(.residentTaxAmount),
+           let residentTaxAmount = candidate.residentTaxAmount {
+            residentTaxAmountText = residentTaxAmount.formText
+        }
+
         validationMessage = nil
         let appliedFields = appliedFieldLabels(for: selectedFields)
         ocrStatusMessage = "フォームに反映しました（\(appliedFields)）。内容を照合し、右上の「保存」を押してください。"
@@ -739,7 +749,9 @@ struct PayRecordFormView: View {
             (.paymentDate, "支給年月"),
             (.grossAmount, "額面"),
             (.netAmount, "手取り"),
-            (.deductionAmount, "控除合計")
+            (.deductionAmount, "控除合計"),
+            (.incomeTaxAmount, "所得税"),
+            (.residentTaxAmount, "住民税")
         ]
         let labels = orderedFields.compactMap { field, label in
             selectedFields.contains(field) ? label : nil
@@ -865,6 +877,8 @@ private struct OCRCandidateReviewView: View {
     @State private var useGrossAmount: Bool
     @State private var useNetAmount: Bool
     @State private var useDeductionAmount: Bool
+    @State private var useIncomeTaxAmount: Bool
+    @State private var useResidentTaxAmount: Bool
 
     init(
         candidate: OCRPayRecordCandidate,
@@ -896,13 +910,19 @@ private struct OCRCandidateReviewView: View {
         _useDeductionAmount = State(
             initialValue: candidate.deductionCandidate?.isInitiallySelected ?? false
         )
+        _useIncomeTaxAmount = State(
+            initialValue: candidate.incomeTaxCandidate?.isInitiallySelected ?? false
+        )
+        _useResidentTaxAmount = State(
+            initialValue: candidate.residentTaxCandidate?.isInitiallySelected ?? false
+        )
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("書類から読み取った入力候補です。使う項目だけを選び、原本と照合してから反映してください。確信度が低い候補は選択していません。")
+                    Text("書類から読み取った入力候補です。使う項目だけを選び、原本と照合してから反映してください。確信度が低い候補は「要確認」と表示します。推定値は初期選択していません。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -965,6 +985,20 @@ private struct OCRCandidateReviewView: View {
                         sourceText: candidate.deductionCandidate?.sourceText,
                         isSelected: $useDeductionAmount
                     )
+                    candidateSelectionRow(
+                        title: "所得税",
+                        value: amountText(candidate.incomeTaxAmount),
+                        confidenceText: confidenceText(candidate.incomeTaxCandidate),
+                        sourceText: candidate.incomeTaxCandidate?.sourceText,
+                        isSelected: $useIncomeTaxAmount
+                    )
+                    candidateSelectionRow(
+                        title: "住民税",
+                        value: amountText(candidate.residentTaxAmount),
+                        confidenceText: confidenceText(candidate.residentTaxCandidate),
+                        sourceText: candidate.residentTaxCandidate?.sourceText,
+                        isSelected: $useResidentTaxAmount
+                    )
                 }
 
                 if candidate.deductionCandidate?.isInferred == true {
@@ -1011,6 +1045,12 @@ private struct OCRCandidateReviewView: View {
         }
         if useDeductionAmount, candidate.deductionCandidate != nil {
             fields.insert(.deductionAmount)
+        }
+        if useIncomeTaxAmount, candidate.incomeTaxCandidate != nil {
+            fields.insert(.incomeTaxAmount)
+        }
+        if useResidentTaxAmount, candidate.residentTaxCandidate != nil {
+            fields.insert(.residentTaxAmount)
         }
         return fields
     }
