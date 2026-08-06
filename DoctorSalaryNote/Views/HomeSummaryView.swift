@@ -174,21 +174,45 @@ struct HomeSummaryView: View {
 
     private var latestMonthSection: some View {
         homeCard(tint: .blue) {
-            VStack(alignment: .leading, spacing: 14) {
-                sectionHeader(
-                    title: "\(latestMonthSummary.longLabel)の給与",
-                    subtitle: latestMonthSummary.records.isEmpty ? "この月の給与明細はまだありません" : "\(latestMonthSummary.records.count)件の給与明細",
-                    systemImage: "calendar.badge.clock"
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    headerIcon("calendar.badge.clock")
+                    Text("\(latestMonthSummary.longLabel)の給与")
+                        .font(.headline)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    summaryItem(title: "額面", value: yenText(latestMonthSummary.grossTotal))
-                    summaryItem(title: "手取り", value: latestMonthSummary.netDisplayText)
-                    summaryItem(title: "控除", value: yenText(latestMonthSummary.deductionTotal))
-                    summaryItem(title: "給与明細", value: "\(latestMonthSummary.records.count)件")
+                    Spacer()
+
+                    if latestMonthSummary.records.isEmpty {
+                        Text("未登録")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                HStack(spacing: 16) {
+                    latestMonthAmount("額面", yenText(latestMonthSummary.grossTotal))
+
+                    Divider()
+                        .frame(height: 36)
+
+                    latestMonthAmount("手取り", latestMonthSummary.netDisplayText)
                 }
             }
         }
+    }
+
+    private func latestMonthAmount(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var yearSummarySection: some View {
@@ -226,22 +250,6 @@ struct HomeSummaryView: View {
                 .minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func summaryItem(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color.cyan.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var recentRecordsSection: some View {

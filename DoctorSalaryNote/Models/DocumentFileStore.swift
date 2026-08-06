@@ -46,7 +46,8 @@ enum DocumentFileStore {
 
     static func fileURL(for attachment: DocumentAttachment) -> URL? {
         if let localFilePath = attachment.localFilePath,
-           let fileURL = fileURL(forLocalFilePath: localFilePath) {
+           let fileURL = fileURL(forLocalFilePath: localFilePath),
+           FileManager.default.fileExists(atPath: fileURL.path) {
             return fileURL
         }
 
@@ -54,7 +55,11 @@ enum DocumentFileStore {
             return nil
         }
 
-        return try? attachmentsDirectory().appendingPathComponent(storedFileName)
+        guard let fallbackURL = try? attachmentsDirectory().appendingPathComponent(storedFileName),
+              FileManager.default.fileExists(atPath: fallbackURL.path) else {
+            return nil
+        }
+        return fallbackURL
     }
 
     static func deleteFile(for attachment: DocumentAttachment) {

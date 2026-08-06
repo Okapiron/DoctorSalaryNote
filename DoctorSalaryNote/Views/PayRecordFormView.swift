@@ -770,6 +770,7 @@ struct PayRecordFormView: View {
             try modelContext.save()
             dismiss()
         } catch {
+            modelContext.rollback()
             showValidation("保存に失敗しました。もう一度お試しください。")
         }
     }

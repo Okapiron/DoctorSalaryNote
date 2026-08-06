@@ -199,7 +199,12 @@ struct SettingsView: View {
         }
 
         modelContext.insert(AppSettings())
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            securityMessage = "設定を準備できませんでした。アプリを再起動して、もう一度お試しください。"
+        }
     }
 
     private func setBiometricLockEnabled(_ isEnabled: Bool) {
@@ -211,15 +216,17 @@ struct SettingsView: View {
                 return
             }
 
-            updateBiometricLock(isEnabled: true)
-            securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを有効にしました。次回起動時、または1分以上アプリを離れた後に認証します。"
+            if updateBiometricLock(isEnabled: true) {
+                securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを有効にしました。次回起動時、または1分以上アプリを離れた後に認証します。"
+            }
         } else {
-            updateBiometricLock(isEnabled: false)
-            securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを無効にしました。"
+            if updateBiometricLock(isEnabled: false) {
+                securityMessage = "\(BiometricAuthenticator.biometryLabel())ロックを無効にしました。"
+            }
         }
     }
 
-    private func updateBiometricLock(isEnabled: Bool) {
+    private func updateBiometricLock(isEnabled: Bool) -> Bool {
         let targetSettings: AppSettings
         if let settings {
             targetSettings = settings
@@ -231,8 +238,15 @@ struct SettingsView: View {
 
         targetSettings.isBiometricLockEnabled = isEnabled
         targetSettings.updatedAt = Date()
-        UserDefaults.standard.set(isEnabled, forKey: "biometricLockEnabled")
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            UserDefaults.standard.set(isEnabled, forKey: "biometricLockEnabled")
+            return true
+        } catch {
+            modelContext.rollback()
+            securityMessage = "ロック設定を保存できませんでした。もう一度お試しください。"
+            return false
+        }
     }
 
     private func makeCSVFile() {

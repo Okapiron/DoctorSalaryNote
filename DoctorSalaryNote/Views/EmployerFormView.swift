@@ -111,8 +111,13 @@ struct EmployerFormView: View {
             modelContext.insert(newEmployer)
         }
 
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            validationMessage = "勤務先を保存できませんでした。もう一度お試しください。"
+        }
     }
 }
 
@@ -122,6 +127,7 @@ private struct EmployerDeductionTemplateListView: View {
     let employer: Employer
 
     @State private var isAddingTemplate = false
+    @State private var operationErrorMessage: String?
 
     private var sortedTemplates: [EmployerDeductionTemplate] {
         employer.deductionTemplates.sorted {
@@ -188,6 +194,16 @@ private struct EmployerDeductionTemplateListView: View {
                 EmployerDeductionTemplateFormView(employer: employer)
             }
         }
+        .alert("変更を保存できませんでした", isPresented: Binding(
+            get: { operationErrorMessage != nil },
+            set: { if !$0 { operationErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                operationErrorMessage = nil
+            }
+        } message: {
+            Text(operationErrorMessage ?? "もう一度お試しください。")
+        }
     }
 
     private func moveTemplates(from source: IndexSet, to destination: Int) {
@@ -197,7 +213,7 @@ private struct EmployerDeductionTemplateListView: View {
             template.sortOrder = index
             template.updatedAt = Date()
         }
-        try? modelContext.save()
+        saveListChange(errorMessage: "控除項目の並び順を保存できませんでした。")
     }
 
     private func deleteTemplates(at offsets: IndexSet) {
@@ -205,7 +221,16 @@ private struct EmployerDeductionTemplateListView: View {
         for offset in offsets {
             modelContext.delete(templates[offset])
         }
-        try? modelContext.save()
+        saveListChange(errorMessage: "控除項目を削除できませんでした。")
+    }
+
+    private func saveListChange(errorMessage: String) {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationErrorMessage = errorMessage
+        }
     }
 }
 
@@ -308,6 +333,7 @@ private struct EmployerDeductionTemplateFormView: View {
             try modelContext.save()
             dismiss()
         } catch {
+            modelContext.rollback()
             validationMessage = "保存できませんでした。もう一度お試しください。"
         }
     }

@@ -325,6 +325,7 @@ struct DocumentFormView: View {
             DocumentFileStore.deleteFile(at: pendingOldFileURLToDelete)
             dismiss()
         } catch {
+            modelContext.rollback()
             showValidation("書類の保存に失敗しました。もう一度お試しください。")
         }
     }
@@ -348,7 +349,9 @@ struct DocumentFormView: View {
 
     private func handlePhotoImport(_ item: PhotosPickerItem) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            guard let sourceData = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: sourceData),
+                  let data = image.jpegData(compressionQuality: 0.95) else {
                 await MainActor.run {
                     showValidation("画像を読み込めませんでした。")
                 }

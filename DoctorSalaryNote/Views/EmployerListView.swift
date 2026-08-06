@@ -13,6 +13,7 @@ struct EmployerListView: View {
     @State private var blockedEmployerName: String?
     @State private var payRecordEmployer: Employer?
     @State private var draggedEmployerID: Int?
+    @State private var operationErrorMessage: String?
 
     private var displayedEmployers: [Employer] {
         employers.sorted { lhs, rhs in
@@ -121,6 +122,16 @@ struct EmployerListView: View {
         } message: {
             Text("\(blockedEmployerName ?? "この勤務先")には給与明細が登録されています。削除せず、勤務先編集で「無効にする」を使ってください。")
         }
+        .alert("変更を保存できませんでした", isPresented: Binding(
+            get: { operationErrorMessage != nil },
+            set: { if !$0 { operationErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                operationErrorMessage = nil
+            }
+        } message: {
+            Text(operationErrorMessage ?? "もう一度お試しください。")
+        }
     }
 
     private func moveEmployers(from source: IndexSet, to destination: Int) {
@@ -152,7 +163,12 @@ struct EmployerListView: View {
             employer.updatedAt = Date()
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationErrorMessage = "勤務先の並び順を保存できませんでした。"
+        }
     }
 
     private func employerID(for employer: Employer) -> Int {
@@ -170,7 +186,12 @@ struct EmployerListView: View {
             modelContext.delete(employer)
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationErrorMessage = "勤務先を削除できませんでした。"
+        }
     }
 }
 

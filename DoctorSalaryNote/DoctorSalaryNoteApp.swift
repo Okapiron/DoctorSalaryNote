@@ -3,7 +3,10 @@ import SwiftUI
 
 @main
 struct DoctorSalaryNoteApp: App {
-    private let modelContainer: ModelContainer = {
+    private let modelContainer: ModelContainer?
+    private let modelContainerError: String?
+
+    init() {
         let schema = Schema([
             Employer.self,
             PayRecord.self,
@@ -15,16 +18,36 @@ struct DoctorSalaryNoteApp: App {
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
-            return try ModelContainer(for: schema, configurations: [configuration])
+            modelContainer = try ModelContainer(for: schema, configurations: [configuration])
+            modelContainerError = nil
         } catch {
-            fatalError("ModelContainerの初期化に失敗しました: \(error)")
+            modelContainer = nil
+            modelContainerError = error.localizedDescription
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if let modelContainer {
+                ContentView()
+                    .modelContainer(modelContainer)
+            } else {
+                DataStoreErrorView(errorDescription: modelContainerError)
+            }
         }
-        .modelContainer(modelContainer)
+    }
+}
+
+private struct DataStoreErrorView: View {
+    let errorDescription: String?
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("データを読み込めませんでした", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("アプリを終了して、もう一度開いてください。改善しない場合は、アプリを削除せずにサポートへお問い合わせください。")
+        }
+        .padding()
+        .accessibilityHint(errorDescription ?? "端末内データの初期化に失敗しました。")
     }
 }
