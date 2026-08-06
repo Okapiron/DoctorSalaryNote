@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import PDFKit
 import UIKit
@@ -106,10 +107,24 @@ struct OCRPayRecordCandidate: Identifiable {
 }
 
 enum OCRExtractionService {
-    enum OCRError: Error {
+    enum OCRError: LocalizedError {
         case unsupportedFile
+        case unreadablePDF
         case imageRenderingFailed
         case recognitionFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedFile:
+                "対応していないファイル形式です。"
+            case .unreadablePDF:
+                "PDFを開けませんでした。パスワード保護やファイル破損がないか確認してください。"
+            case .imageRenderingFailed:
+                "書類を画像として読み込めませんでした。"
+            case .recognitionFailed:
+                "書類内の文字を認識できませんでした。"
+            }
+        }
     }
 
     static func extractPayRecordCandidate(
@@ -122,16 +137,7 @@ enum OCRExtractionService {
             if fileType == .pdf {
                 lines.append(contentsOf: embeddedPDFTextLines(from: fileURL))
                 do {
-                    let images = try imagesForRecognition(from: fileURL, fileType: fileType)
-                    for (pageIndex, image) in images.enumerated() {
-                        guard let recognizedLines = try? recognizeTextLines(
-                            in: image,
-                            pageIndex: pageIndex
-                        ) else {
-                            continue
-                        }
-                        lines.append(contentsOf: recognizedLines)
-                    }
+                    lines.append(contentsOf: try recognizedPDFTextLines(from: fileURL))
                 } catch {
                     guard !lines.isEmpty else {
                         throw error
@@ -291,23 +297,36 @@ enum OCRExtractionService {
             }
             return [cgImage]
 
-        case .pdf:
-            guard let document = PDFDocument(url: fileURL), document.pageCount > 0 else {
-                throw OCRError.imageRenderingFailed
-            }
-
-            let pageLimit = min(document.pageCount, 2)
-            return try (0..<pageLimit).map { index in
-                guard let page = document.page(at: index),
-                      let image = renderPDFPage(page) else {
-                    throw OCRError.imageRenderingFailed
-                }
-                return image
-            }
-
-        case .other:
+        case .pdf, .other:
             throw OCRError.unsupportedFile
         }
+    }
+
+    private static func recognizedPDFTextLines(from fileURL: URL) throws -> [RecognizedLine] {
+        guard let provider = CGDataProvider(url: fileURL as CFURL),
+              let document = CGPDFDocument(provider),
+              document.numberOfPages > 0 else {
+            throw OCRError.unreadablePDF
+        }
+
+        var recognizedLines: [RecognizedLine] = []
+        let pageLimit = min(document.numberOfPages, 2)
+
+        for pageIndex in 0..<pageLimit {
+            guard let page = document.page(at: pageIndex + 1),
+                  let image = renderPDFPage(page) else {
+                continue
+            }
+
+            if let pageLines = try? recognizeTextLines(in: image, pageIndex: pageIndex) {
+                recognizedLines.append(contentsOf: pageLines)
+            }
+        }
+
+        guard !recognizedLines.isEmpty else {
+            throw OCRError.recognitionFailed
+        }
+        return recognizedLines
     }
 
     private static func normalizedCGImage(from image: UIImage) -> CGImage? {
@@ -333,29 +352,49 @@ enum OCRExtractionService {
         }.cgImage
     }
 
-    private static func renderPDFPage(_ page: PDFPage) -> CGImage? {
-        let bounds = page.bounds(for: .mediaBox)
+    private static func renderPDFPage(_ page: CGPDFPage) -> CGImage? {
+        let bounds = page.getBoxRect(.mediaBox)
         let maximumDimension: CGFloat = 3_000
-        let largestDimension = max(bounds.width, bounds.height)
+        let normalizedRotation = ((page.rotationAngle % 360) + 360) % 360
+        let swapsDimensions = normalizedRotation == 90 || normalizedRotation == 270
+        let pageSize = CGSize(
+            width: swapsDimensions ? bounds.height : bounds.width,
+            height: swapsDimensions ? bounds.width : bounds.height
+        )
+        let largestDimension = max(pageSize.width, pageSize.height)
         guard largestDimension > 0 else {
             return nil
         }
 
         let scale = min(3, maximumDimension / largestDimension)
-        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let width = max(1, Int((pageSize.width * scale).rounded(.up)))
+        let height = max(1, Int((pageSize.height * scale).rounded(.up)))
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else {
+            return nil
+        }
 
-        return renderer.image { context in
-            UIColor.white.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            context.cgContext.saveGState()
-            context.cgContext.scaleBy(x: scale, y: scale)
-            page.draw(with: .mediaBox, to: context.cgContext)
-            context.cgContext.restoreGState()
-        }.cgImage
+        let targetRect = CGRect(x: 0, y: 0, width: width, height: height)
+        context.setFillColor(UIColor.white.cgColor)
+        context.fill(targetRect)
+        context.concatenate(
+            page.getDrawingTransform(
+                .mediaBox,
+                rect: targetRect,
+                rotate: 0,
+                preserveAspectRatio: true
+            )
+        )
+        context.drawPDFPage(page)
+        return context.makeImage()
     }
 
     private static func recognizeTextLines(

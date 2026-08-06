@@ -52,6 +52,7 @@ struct PayRecordFormView: View {
     @State private var pendingDocumentFileURL: URL?
     @State private var isRunningOCR = false
     @State private var ocrStatusMessage: String?
+    @State private var availableOCRCandidate: OCRPayRecordCandidate?
     @State private var ocrCandidateForReview: OCRPayRecordCandidate?
 
     init(
@@ -256,20 +257,32 @@ struct PayRecordFormView: View {
         .sheet(item: $ocrCandidateForReview) { candidate in
             OCRCandidateReviewView(
                 candidate: candidate,
-                matchedEmployerName: matchedEmployer(for: candidate)?.name,
+                employers: selectableEmployers,
+                suggestedEmployerID: suggestedEmployer(for: candidate)?.persistentModelID,
                 fileURL: pendingDocumentFileURL,
                 fileType: pendingDocumentFileType,
                 fileTitle: pendingDocumentOriginalFileName ?? pendingDocumentType.label,
                 onCancel: {
                     ocrCandidateForReview = nil
                 },
-                onApply: { selectedFields in
-                    applyOCRCandidate(candidate, selectedFields: selectedFields)
+                onApply: { selectedFields, employerID in
+                    applyOCRCandidate(
+                        candidate,
+                        selectedFields: selectedFields,
+                        employerID: employerID
+                    )
+                    availableOCRCandidate = nil
                     ocrCandidateForReview = nil
                 }
             )
         }
         .onAppear {
+            if payRecord == nil,
+               selectedEmployerID == nil,
+               selectableEmployers.count == 1 {
+                selectedEmployerID = selectableEmployers[0].persistentModelID
+            }
+
             guard payRecord == nil,
                   showsImportOptionsOnAppear,
                   !hasPresentedInitialImportOptions else {
@@ -336,6 +349,15 @@ struct PayRecordFormView: View {
                 Text(ocrStatusMessage)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if let availableOCRCandidate {
+                Button {
+                    presentOCRCandidate(availableOCRCandidate)
+                } label: {
+                    Label("読み取り結果を確認", systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(.borderless)
             }
         }
 
@@ -594,6 +616,8 @@ struct PayRecordFormView: View {
         pendingDocumentFileSize = storedFile.fileSize
         pendingDocumentFileType = storedFile.fileType
         pendingDocumentFileURL = newFileURL
+        availableOCRCandidate = nil
+        ocrCandidateForReview = nil
         validationMessage = nil
         startOCRIfNeeded(for: newFileURL, fileType: storedFile.fileType)
     }
@@ -618,10 +642,20 @@ struct PayRecordFormView: View {
 
                     isRunningOCR = false
                     if candidate.hasUsableValue {
-                        ocrStatusMessage = "入力候補を見つけました。内容を確認して反映できます。"
-                        ocrCandidateForReview = candidate
+                        availableOCRCandidate = candidate
+                        ocrStatusMessage = "入力候補を見つけました。「読み取り結果を確認」からフォームへ反映できます。"
+
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            guard pendingDocumentFileURL == fileURL,
+                                  availableOCRCandidate?.id == candidate.id,
+                                  ocrCandidateForReview == nil else {
+                                return
+                            }
+                            presentOCRCandidate(candidate)
+                        }
                     } else {
-                        ocrStatusMessage = "自動入力できる候補は見つかりませんでした。必要な項目は手入力してください。"
+                        ocrStatusMessage = "文字は読み取りましたが、支給年月や金額の候補を特定できませんでした。必要な項目は手入力してください。"
                     }
                 }
             } catch {
@@ -631,7 +665,8 @@ struct PayRecordFormView: View {
                     }
 
                     isRunningOCR = false
-                    ocrStatusMessage = "書類を読み取れませんでした。必要な項目は手入力してください。"
+                    let reason = error.localizedDescription
+                    ocrStatusMessage = "書類を読み取れませんでした。\(reason)"
                 }
             }
         }
@@ -639,11 +674,12 @@ struct PayRecordFormView: View {
 
     private func applyOCRCandidate(
         _ candidate: OCRPayRecordCandidate,
-        selectedFields: Set<OCRField>
+        selectedFields: Set<OCRField>,
+        employerID: PersistentIdentifier?
     ) {
         if selectedFields.contains(.employer),
-           let employer = matchedEmployer(for: candidate) {
-            selectedEmployerID = employer.persistentModelID
+           let employerID {
+            selectedEmployerID = employerID
         }
 
         if selectedFields.contains(.paymentDate),
@@ -672,13 +708,24 @@ struct PayRecordFormView: View {
         }
 
         validationMessage = nil
-        ocrStatusMessage = "選択した候補を反映しました。保存前に書類と金額を照合してください。"
+        ocrStatusMessage = "選択した候補をフォームへ反映しました。内容を照合し、右上の「保存」を押してください。"
     }
 
-    private func matchedEmployer(for candidate: OCRPayRecordCandidate) -> Employer? {
+    private func presentOCRCandidate(_ candidate: OCRPayRecordCandidate) {
+        ocrCandidateForReview = nil
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard availableOCRCandidate?.id == candidate.id else {
+                return
+            }
+            ocrCandidateForReview = candidate
+        }
+    }
+
+    private func suggestedEmployer(for candidate: OCRPayRecordCandidate) -> Employer? {
         let recognizedText = normalizedSearchText(candidate.recognizedText)
 
-        return selectableEmployers
+        let matchedEmployer = selectableEmployers
             .filter { employer in
                 let employerName = normalizedSearchText(employer.name)
                 return !employerName.isEmpty && recognizedText.contains(employerName)
@@ -686,6 +733,12 @@ struct PayRecordFormView: View {
             .max { lhs, rhs in
                 normalizedSearchText(lhs.name).count < normalizedSearchText(rhs.name).count
             }
+
+        if let matchedEmployer {
+            return matchedEmployer
+        }
+
+        return selectableEmployers.count == 1 ? selectableEmployers[0] : nil
     }
 
     private func normalizedSearchText(_ text: String) -> String {
@@ -764,14 +817,14 @@ private extension Int {
 
 private struct OCRCandidateReviewView: View {
     let candidate: OCRPayRecordCandidate
-    let matchedEmployerName: String?
+    let employers: [Employer]
     let fileURL: URL?
     let fileType: AttachmentFileType
     let fileTitle: String
     let onCancel: () -> Void
-    let onApply: (Set<OCRField>) -> Void
+    let onApply: (Set<OCRField>, PersistentIdentifier?) -> Void
 
-    @State private var useEmployer: Bool
+    @State private var selectedEmployerID: PersistentIdentifier?
     @State private var usePaymentDate: Bool
     @State private var useGrossAmount: Bool
     @State private var useNetAmount: Bool
@@ -779,21 +832,22 @@ private struct OCRCandidateReviewView: View {
 
     init(
         candidate: OCRPayRecordCandidate,
-        matchedEmployerName: String?,
+        employers: [Employer],
+        suggestedEmployerID: PersistentIdentifier?,
         fileURL: URL?,
         fileType: AttachmentFileType,
         fileTitle: String,
         onCancel: @escaping () -> Void,
-        onApply: @escaping (Set<OCRField>) -> Void
+        onApply: @escaping (Set<OCRField>, PersistentIdentifier?) -> Void
     ) {
         self.candidate = candidate
-        self.matchedEmployerName = matchedEmployerName
+        self.employers = employers
         self.fileURL = fileURL
         self.fileType = fileType
         self.fileTitle = fileTitle
         self.onCancel = onCancel
         self.onApply = onApply
-        _useEmployer = State(initialValue: matchedEmployerName != nil)
+        _selectedEmployerID = State(initialValue: suggestedEmployerID)
         _usePaymentDate = State(
             initialValue: candidate.paymentDateCandidate?.isInitiallySelected ?? false
         )
@@ -831,14 +885,22 @@ private struct OCRCandidateReviewView: View {
                     }
                 }
 
+                Section("勤務先") {
+                    if employers.isEmpty {
+                        Text("勤務先が未登録です。候補を反映した後、勤務先を追加してください。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("勤務先（必須）", selection: $selectedEmployerID) {
+                            Text("後で選択").tag(Optional<PersistentIdentifier>.none)
+                            ForEach(employers) { employer in
+                                Text(employer.name).tag(Optional(employer.persistentModelID))
+                            }
+                        }
+                    }
+                }
+
                 Section("読み取り候補") {
-                    candidateSelectionRow(
-                        title: "勤務先",
-                        value: matchedEmployerName,
-                        confidenceText: matchedEmployerName == nil ? nil : "名称一致",
-                        sourceText: nil,
-                        isSelected: $useEmployer
-                    )
                     candidateSelectionRow(
                         title: "支給年月",
                         value: paymentDateText,
@@ -888,8 +950,8 @@ private struct OCRCandidateReviewView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("反映") {
-                        onApply(selectedFields)
+                    Button("フォームに反映") {
+                        onApply(selectedFields, selectedEmployerID)
                     }
                     .disabled(selectedFields.isEmpty)
                 }
@@ -899,7 +961,7 @@ private struct OCRCandidateReviewView: View {
 
     private var selectedFields: Set<OCRField> {
         var fields = Set<OCRField>()
-        if useEmployer, matchedEmployerName != nil {
+        if selectedEmployerID != nil {
             fields.insert(.employer)
         }
         if usePaymentDate, candidate.paymentDateCandidate != nil {
