@@ -269,7 +269,7 @@ enum OCRExtractionService {
         var deduction = bestAmountCandidate(for: .deduction, in: meaningfulLines)
         let incomeTax = bestAmountCandidate(for: .incomeTax, in: meaningfulLines)
         let residentTax = bestAmountCandidate(for: .residentTax, in: meaningfulLines)
-        let customDeductions = deductionFieldSpecs.compactMap { spec -> OCRCustomDeductionCandidate? in
+        let rawCustomDeductions = deductionFieldSpecs.compactMap { spec -> OCRCustomDeductionCandidate? in
             let keywords = Array(Set([spec.displayName] + spec.keywords)).filter { !$0.isEmpty }
             guard !keywords.isEmpty,
                   let amount = bestAmountCandidate(
@@ -286,6 +286,7 @@ enum OCRExtractionService {
                 amountCandidate: makeAmountCandidate(from: amount)
             )
         }
+        let customDeductions = deduplicatedCustomDeductionCandidates(rawCustomDeductions)
 
         adjustConfidenceForArithmeticConsistency(
             gross: &gross,
@@ -324,6 +325,37 @@ enum OCRExtractionService {
             sourceText: candidate.sourceText,
             isInferred: candidate.isInferred
         )
+    }
+
+    private static func deduplicatedCustomDeductionCandidates(
+        _ candidates: [OCRCustomDeductionCandidate]
+    ) -> [OCRCustomDeductionCandidate] {
+        var result: [OCRCustomDeductionCandidate] = []
+
+        for candidate in candidates {
+            let sourceText = normalizeJapaneseText(candidate.amountCandidate.sourceText)
+            if let duplicateIndex = result.firstIndex(where: {
+                $0.amountCandidate.value == candidate.amountCandidate.value &&
+                    normalizeJapaneseText($0.amountCandidate.sourceText) == sourceText
+            }) {
+                let existing = result[duplicateIndex]
+                let existingPosition = sourceText.range(
+                    of: normalizeJapaneseText(existing.displayName)
+                )?.lowerBound
+                let candidatePosition = sourceText.range(
+                    of: normalizeJapaneseText(candidate.displayName)
+                )?.lowerBound
+
+                if let candidatePosition,
+                   existingPosition == nil || candidatePosition < existingPosition! {
+                    result[duplicateIndex] = candidate
+                }
+            } else {
+                result.append(candidate)
+            }
+        }
+
+        return result
     }
 
     private static func embeddedPDFTextLines(from fileURL: URL) -> [RecognizedLine] {
