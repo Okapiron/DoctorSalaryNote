@@ -14,7 +14,7 @@ struct PayRecordListView: View {
     ]) private var documentAttachments: [DocumentAttachment]
 
     @State private var isAddingPayRecord = false
-    @State private var selectedEmployerID: Int?
+    @State private var selectedEmployerID: PayRecordEmployerSummaryID?
     @State private var payRecordPage = 0
     @State private var payRecordsPendingDeletion: [PayRecord] = []
     @State private var isShowingPayRecordDeleteConfirmation = false
@@ -23,7 +23,7 @@ struct PayRecordListView: View {
     private let payRecordsPerPage = 20
 
     private var employerSummaries: [PayRecordEmployerSummary] {
-        var buckets: [Int: (employer: Employer?, records: [PayRecord])] = [:]
+        var buckets: [PayRecordEmployerSummaryID: (employer: Employer?, records: [PayRecord])] = [:]
 
         for record in payRecords {
             let id = summaryID(for: record.employer)
@@ -131,25 +131,27 @@ struct PayRecordListView: View {
                         }
                         .onDelete(perform: deletePayRecords)
                     } header: {
-                        HStack {
-                            Text(selectedSummary.map { "\($0.employerName)の給与明細" } ?? "給与明細")
-                            Spacer()
-                            if payRecordPageCount > 1 {
-                                Text("\(clampedPayRecordPage + 1)/\(payRecordPageCount)")
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(selectedSummary.map { "\($0.employerName)の給与明細" } ?? "給与明細")
+                                Spacer()
+                                if selectedEmployerID != nil {
+                                    Button("すべて表示") {
+                                        selectedEmployerID = nil
+                                    }
                                     .font(.caption)
-                                    .monospacedDigit()
-
-                                Text(payRecordPageRangeText)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-
-                                pageControl
-                            }
-                            if selectedEmployerID != nil {
-                                Button("すべて表示") {
-                                    selectedEmployerID = nil
                                 }
-                                .font(.caption)
+                            }
+
+                            if payRecordPageCount > 1 {
+                                HStack {
+                                    Text("\(clampedPayRecordPage + 1)/\(payRecordPageCount)ページ・\(payRecordPageRangeText)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .monospacedDigit()
+                                    Spacer()
+                                    pageControl
+                                }
                             }
                         }
                     }
@@ -232,7 +234,11 @@ struct PayRecordListView: View {
 
         do {
             try modelContext.save()
-            fileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
+            do {
+                try DocumentFileStore.deleteFiles(at: fileURLs)
+            } catch {
+                deletionErrorMessage = "給与明細は削除しましたが、端末内の添付ファイルを整理できませんでした。アプリを再起動して、もう一度お試しください。"
+            }
             clampPayRecordPage()
         } catch {
             modelContext.rollback()
@@ -280,8 +286,8 @@ struct PayRecordListView: View {
         payRecordPage = clampedPayRecordPage
     }
 
-    private func summaryID(for employer: Employer?) -> Int {
-        employer?.persistentModelID.hashValue ?? -1
+    private func summaryID(for employer: Employer?) -> PayRecordEmployerSummaryID {
+        employer.map { .employer($0.persistentModelID) } ?? .unassigned
     }
 
     private func hasLinkedDocument(for record: PayRecord) -> Bool {
@@ -296,7 +302,7 @@ struct PayRecordListView: View {
 }
 
 private struct PayRecordEmployerSummary: Identifiable {
-    let id: Int
+    let id: PayRecordEmployerSummaryID
     let employer: Employer?
     let employerName: String
     let records: [PayRecord]
@@ -308,6 +314,11 @@ private struct PayRecordEmployerSummary: Identifiable {
     var grossTotal: Int {
         records.reduce(0) { $0 + $1.grossAmount }
     }
+}
+
+private enum PayRecordEmployerSummaryID: Hashable {
+    case employer(PersistentIdentifier)
+    case unassigned
 }
 
 private struct PayRecordEmployerSummaryRow: View {

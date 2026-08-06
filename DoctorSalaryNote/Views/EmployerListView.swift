@@ -9,10 +9,12 @@ struct EmployerListView: View {
         SortDescriptor(\Employer.name)
     ]) private var employers: [Employer]
 
+    @Query private var documents: [DocumentAttachment]
+
     @State private var isAddingEmployer = false
     @State private var blockedEmployerName: String?
     @State private var payRecordEmployer: Employer?
-    @State private var draggedEmployerID: Int?
+    @State private var draggedEmployerID: PersistentIdentifier?
     @State private var operationErrorMessage: String?
 
     private var displayedEmployers: [Employer] {
@@ -120,7 +122,7 @@ struct EmployerListView: View {
                 blockedEmployerName = nil
             }
         } message: {
-            Text("\(blockedEmployerName ?? "この勤務先")には給与明細が登録されています。削除せず、勤務先編集で「無効にする」を使ってください。")
+            Text("\(blockedEmployerName ?? "この勤務先")には給与明細または書類が登録されています。削除せず、勤務先編集で「無効にする」を使ってください。")
         }
         .alert("変更を保存できませんでした", isPresented: Binding(
             get: { operationErrorMessage != nil },
@@ -141,7 +143,10 @@ struct EmployerListView: View {
         applySortOrder(to: reorderedEmployers)
     }
 
-    private func reorderEmployer(draggedEmployerID: Int, targetEmployerID: Int) {
+    private func reorderEmployer(
+        draggedEmployerID: PersistentIdentifier,
+        targetEmployerID: PersistentIdentifier
+    ) {
         guard draggedEmployerID != targetEmployerID else {
             return
         }
@@ -171,13 +176,13 @@ struct EmployerListView: View {
         }
     }
 
-    private func employerID(for employer: Employer) -> Int {
-        employer.persistentModelID.hashValue
+    private func employerID(for employer: Employer) -> PersistentIdentifier {
+        employer.persistentModelID
     }
 
     private func deleteEmployers(at offsets: IndexSet) {
         let targets = offsets.map { displayedEmployers[$0] }
-        if let blockedEmployer = targets.first(where: { !$0.payRecords.isEmpty }) {
+        if let blockedEmployer = targets.first(where: hasAssociatedData) {
             blockedEmployerName = blockedEmployer.name
             return
         }
@@ -193,12 +198,22 @@ struct EmployerListView: View {
             operationErrorMessage = "勤務先を削除できませんでした。"
         }
     }
+
+    private func hasAssociatedData(_ employer: Employer) -> Bool {
+        if !employer.payRecords.isEmpty {
+            return true
+        }
+
+        return documents.contains {
+            $0.employer?.persistentModelID == employer.persistentModelID
+        }
+    }
 }
 
 private struct EmployerDropDelegate: DropDelegate {
-    let targetEmployerID: Int
-    @Binding var draggedEmployerID: Int?
-    let moveEmployer: (Int, Int) -> Void
+    let targetEmployerID: PersistentIdentifier
+    @Binding var draggedEmployerID: PersistentIdentifier?
+    let moveEmployer: (PersistentIdentifier, PersistentIdentifier) -> Void
 
     func dropEntered(info _: DropInfo) {
         guard let draggedEmployerID else {

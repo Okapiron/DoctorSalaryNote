@@ -13,6 +13,7 @@ struct EmployerFormView: View {
     @State private var memo: String
     @State private var isArchived: Bool
     @State private var validationMessage: String?
+    @State private var isShowingValidation = false
 
     init(employer: Employer? = nil) {
         self.employer = employer
@@ -65,12 +66,6 @@ struct EmployerFormView: View {
                 }
             }
 
-            if let validationMessage {
-                Section {
-                    Text(validationMessage)
-                        .foregroundStyle(.red)
-                }
-            }
         }
         .navigationTitle(employer == nil ? "勤務先追加" : "勤務先編集")
         .toolbar {
@@ -83,12 +78,17 @@ struct EmployerFormView: View {
                 Button("保存", action: save)
             }
         }
+        .alert("保存できません", isPresented: $isShowingValidation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(validationMessage ?? "入力内容を確認してください。")
+        }
     }
 
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            validationMessage = "勤務先名を入力してください。"
+            showValidation("勤務先名を入力してください。")
             return
         }
 
@@ -116,8 +116,13 @@ struct EmployerFormView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            validationMessage = "勤務先を保存できませんでした。もう一度お試しください。"
+            showValidation("勤務先を保存できませんでした。もう一度お試しください。")
         }
+    }
+
+    private func showValidation(_ message: String) {
+        validationMessage = message
+        isShowingValidation = true
     }
 }
 
@@ -245,6 +250,7 @@ private struct EmployerDeductionTemplateFormView: View {
     @State private var aliasesText: String
     @State private var isActive: Bool
     @State private var validationMessage: String?
+    @State private var isShowingValidation = false
 
     init(employer: Employer, template: EmployerDeductionTemplate? = nil) {
         self.employer = employer
@@ -274,12 +280,6 @@ private struct EmployerDeductionTemplateFormView: View {
                 Text("帳票によって表記が違う場合は、1行に1つずつ入力します。")
             }
 
-            if let validationMessage {
-                Section {
-                    Text(validationMessage)
-                        .foregroundStyle(.red)
-                }
-            }
         }
         .navigationTitle(template == nil ? "控除項目追加" : "控除項目編集")
         .toolbar {
@@ -290,12 +290,17 @@ private struct EmployerDeductionTemplateFormView: View {
                 Button("保存", action: save)
             }
         }
+        .alert("保存できません", isPresented: $isShowingValidation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(validationMessage ?? "入力内容を確認してください。")
+        }
     }
 
     private func save() {
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            validationMessage = "項目名を入力してください。"
+            showValidation("項目名を入力してください。")
             return
         }
 
@@ -304,7 +309,7 @@ private struct EmployerDeductionTemplateFormView: View {
                 candidate.displayName.compare(name, options: [.caseInsensitive, .widthInsensitive]) == .orderedSame
         }
         guard !duplicateExists else {
-            validationMessage = "同じ名前の控除項目が登録されています。"
+            showValidation("同じ名前の控除項目が登録されています。")
             return
         }
 
@@ -334,7 +339,12 @@ private struct EmployerDeductionTemplateFormView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            validationMessage = "保存できませんでした。もう一度お試しください。"
+            showValidation("保存できませんでした。もう一度お試しください。")
         }
+    }
+
+    private func showValidation(_ message: String) {
+        validationMessage = message
+        isShowingValidation = true
     }
 }

@@ -27,6 +27,8 @@
 		100000000000000000000018 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* Assets.xcassets */; };
 		100000000000000000000019 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000020 /* PrivacyInfo.xcprivacy */; };
 		100000000000000000000020 /* OCRExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* OCRExtractionService.swift */; };
+		100000000000000000000021 /* PayrollValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000022 /* PayrollValidation.swift */; };
+		A00000000000000000000001 /* PayrollValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* PayrollValidationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,10 +53,30 @@
 		200000000000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		200000000000000000000020 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		200000000000000000000021 /* OCRExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRExtractionService.swift; sourceTree = "<group>"; };
+		200000000000000000000022 /* PayrollValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayrollValidation.swift; sourceTree = "<group>"; };
+		B00000000000000000000001 /* PayrollValidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PayrollValidationTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* DoctorSalaryNoteTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DoctorSalaryNoteTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		C00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 700000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 500000000000000000000001;
+			remoteInfo = DoctorSalaryNote;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		300000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C00000000000000000000002 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -68,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				400000000000000000000002 /* DoctorSalaryNote */,
+				D00000000000000000000001 /* DoctorSalaryNoteTests */,
 				400000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -92,6 +115,7 @@
 				200000000000000000000017 /* CSVExportService.swift */,
 				200000000000000000000018 /* BiometricAuthenticator.swift */,
 				200000000000000000000021 /* OCRExtractionService.swift */,
+				200000000000000000000022 /* PayrollValidation.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -119,8 +143,17 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000009 /* DoctorSalaryNote.app */,
+				B00000000000000000000002 /* DoctorSalaryNoteTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000001 /* DoctorSalaryNoteTests */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000001 /* PayrollValidationTests.swift */,
+			);
+			path = DoctorSalaryNoteTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,7 +176,33 @@
 			productReference = 200000000000000000000009 /* DoctorSalaryNote.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E00000000000000000000001 /* DoctorSalaryNoteTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = H00000000000000000000001 /* Build configuration list for PBXNativeTarget "DoctorSalaryNoteTests" */;
+			buildPhases = (
+				F00000000000000000000001 /* Sources */,
+				C00000000000000000000002 /* Frameworks */,
+				F00000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C00000000000000000000003 /* PBXTargetDependency */,
+			);
+			name = DoctorSalaryNoteTests;
+			productName = DoctorSalaryNoteTests;
+			productReference = B00000000000000000000002 /* DoctorSalaryNoteTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXTargetDependency section */
+		C00000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 500000000000000000000001 /* DoctorSalaryNote */;
+			targetProxy = C00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		700000000000000000000001 /* Project object */ = {
@@ -155,6 +214,10 @@
 				TargetAttributes = {
 					500000000000000000000001 = {
 						CreatedOnToolsVersion = 15.4;
+					};
+					E00000000000000000000001 = {
+						CreatedOnToolsVersion = 15.4;
+						TestTargetID = 500000000000000000000001;
 					};
 				};
 			};
@@ -173,6 +236,7 @@
 			projectRoot = "";
 			targets = (
 				500000000000000000000001 /* DoctorSalaryNote */,
+				E00000000000000000000001 /* DoctorSalaryNoteTests */,
 			);
 		};
 /* End PBXProject section */
@@ -184,6 +248,13 @@
 			files = (
 				100000000000000000000018 /* Assets.xcassets in Resources */,
 				100000000000000000000019 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F00000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -208,10 +279,19 @@
 				100000000000000000000016 /* CSVExportService.swift in Sources */,
 				100000000000000000000017 /* BiometricAuthenticator.swift in Sources */,
 				100000000000000000000020 /* OCRExtractionService.swift in Sources */,
+				100000000000000000000021 /* PayrollValidation.swift in Sources */,
 				100000000000000000000005 /* EmployerListView.swift in Sources */,
 				100000000000000000000006 /* EmployerFormView.swift in Sources */,
 				100000000000000000000007 /* PayRecordListView.swift in Sources */,
 				100000000000000000000008 /* PayRecordFormView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F00000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000001 /* PayrollValidationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,7 +418,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 2WG3Z522JL;
 				ENABLE_PREVIEWS = YES;
@@ -370,7 +450,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 35;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = 2WG3Z522JL;
 				ENABLE_PREVIEWS = YES;
@@ -396,6 +476,48 @@
 			};
 			name = Release;
 		};
+		G00000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2WG3Z522JL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hiroki.DoctorSalaryNoteTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DoctorSalaryNote.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DoctorSalaryNote";
+			};
+			name = Debug;
+		};
+		G00000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2WG3Z522JL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hiroki.DoctorSalaryNoteTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DoctorSalaryNote.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DoctorSalaryNote";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -413,6 +535,15 @@
 			buildConfigurations = (
 				800000000000000000000003 /* Debug */,
 				800000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		H00000000000000000000001 /* Build configuration list for PBXNativeTarget "DoctorSalaryNoteTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G00000000000000000000001 /* Debug */,
+				G00000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

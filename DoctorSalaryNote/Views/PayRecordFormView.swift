@@ -43,6 +43,10 @@ struct PayRecordFormView: View {
     private let payRecord: PayRecord?
     private let initialEmployer: Employer?
     private let showsImportOptionsOnAppear: Bool
+    private let initialEmployerID: PersistentIdentifier?
+    private let initialPaymentYear: Int
+    private let initialPaymentMonth: Int
+    private let initialIncomeCategory: IncomeCategory
 
     @State private var selectedEmployerID: PersistentIdentifier?
     @State private var paymentYear: Int
@@ -63,6 +67,7 @@ struct PayRecordFormView: View {
     @State private var isPickingImage = false
     @State private var isShowingCamera = false
     @State private var isShowingInitialImportOptions = false
+    @State private var isShowingImportOverwriteWarning = false
     @State private var hasPresentedInitialImportOptions = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var pendingDocumentLocalFilePath: String?
@@ -87,10 +92,18 @@ struct PayRecordFormView: View {
         self.initialEmployer = initialEmployer
         self.showsImportOptionsOnAppear = showsImportOptionsOnAppear
         let resolvedEmployer = payRecord?.employer ?? initialEmployer
-        _selectedEmployerID = State(initialValue: resolvedEmployer?.persistentModelID)
-        _paymentYear = State(initialValue: payRecord?.paymentYear ?? Calendar.current.component(.year, from: Date()))
-        _paymentMonth = State(initialValue: payRecord?.paymentMonth ?? Calendar.current.component(.month, from: Date()))
-        _incomeCategory = State(initialValue: payRecord?.incomeCategory ?? initialEmployer?.defaultIncomeCategory ?? .partTimeSalary)
+        let resolvedEmployerID = resolvedEmployer?.persistentModelID
+        let resolvedPaymentYear = payRecord?.paymentYear ?? Calendar.current.component(.year, from: Date())
+        let resolvedPaymentMonth = payRecord?.paymentMonth ?? Calendar.current.component(.month, from: Date())
+        let resolvedIncomeCategory = payRecord?.incomeCategory ?? initialEmployer?.defaultIncomeCategory ?? .partTimeSalary
+        initialEmployerID = resolvedEmployerID
+        initialPaymentYear = resolvedPaymentYear
+        initialPaymentMonth = resolvedPaymentMonth
+        initialIncomeCategory = resolvedIncomeCategory
+        _selectedEmployerID = State(initialValue: resolvedEmployerID)
+        _paymentYear = State(initialValue: resolvedPaymentYear)
+        _paymentMonth = State(initialValue: resolvedPaymentMonth)
+        _incomeCategory = State(initialValue: resolvedIncomeCategory)
         _grossAmountText = State(initialValue: payRecord?.grossAmount.formText ?? "")
         _netAmountText = State(initialValue: payRecord?.netAmount?.formText ?? "")
         _deductionAmountText = State(initialValue: payRecord?.deductionAmount?.formText ?? "")
@@ -332,6 +345,7 @@ struct PayRecordFormView: View {
                 Button("保存") {
                     save()
                 }
+                .disabled(isRunningOCR)
             }
 
             ToolbarItemGroup(placement: .keyboard) {
@@ -422,6 +436,14 @@ struct PayRecordFormView: View {
         } message: {
             Text("給与明細を撮影または選択すると、支給年月や金額の入力候補を読み取ります。PDFはスクリーンショットにせず、そのまま選択できます。")
         }
+        .alert("入力済みの内容を置き換えますか？", isPresented: $isShowingImportOverwriteWarning) {
+            Button("キャンセル", role: .cancel) {}
+            Button("書類を選ぶ") {
+                showImportOptions()
+            }
+        } message: {
+            Text("書類から読み取れた項目は、現在の入力内容を置き換えます。未入力の項目はそのままです。")
+        }
         .interactiveDismissDisabled(payRecord == nil && pendingDocumentFileURL != nil)
         .alert("保存できません", isPresented: $isShowingValidation) {
             Button("OK", role: .cancel) {}
@@ -440,10 +462,36 @@ struct PayRecordFormView: View {
 
     private func presentImportOptions() {
         isTextInputFocused = false
+
+        if hasUserEnteredFormData {
+            isShowingImportOverwriteWarning = true
+            return
+        }
+
+        showImportOptions()
+    }
+
+    private func showImportOptions() {
         Task { @MainActor in
             await Task.yield()
             isShowingInitialImportOptions = true
         }
+    }
+
+    private var hasUserEnteredFormData: Bool {
+        selectedEmployerID != initialEmployerID ||
+            paymentYear != initialPaymentYear ||
+            paymentMonth != initialPaymentMonth ||
+            incomeCategory != initialIncomeCategory ||
+            !grossAmountText.isEmpty ||
+            !netAmountText.isEmpty ||
+            !deductionAmountText.isEmpty ||
+            !incomeTaxAmountText.isEmpty ||
+            !residentTaxAmountText.isEmpty ||
+            !otherDeductionAmountText.isEmpty ||
+            deductionDrafts.contains { !$0.amountText.isEmpty } ||
+            !memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            pendingDocumentFileURL != nil
     }
 
     @ViewBuilder
@@ -609,31 +657,17 @@ struct PayRecordFormView: View {
         netAmount: Int?,
         deductionAmount: Int?
     ) -> [String] {
-        var warnings: [String] = []
-
-        if let netAmount {
-            let calculatedDeduction = grossAmount - netAmount
-            if calculatedDeduction < 0 {
-                warnings.append(
-                    "手取りが額面を \((-calculatedDeduction).currencyText) 上回っています。"
-                )
-            } else if let deductionAmount,
-                      calculatedDeduction != deductionAmount {
-                let difference = abs(calculatedDeduction - deductionAmount)
-                warnings.append(
-                    "額面から手取りを引いた金額は \(calculatedDeduction.currencyText) ですが、控除合計は \(deductionAmount.currencyText) です。差額は \(difference.currencyText) です。"
-                )
+        let itemizedTotal = (parsedOptionalAmount(from: incomeTaxAmountText) ?? 0) +
+            (parsedOptionalAmount(from: residentTaxAmountText) ?? 0) +
+            deductionDrafts.reduce(0) {
+                $0 + (parsedOptionalAmount(from: $1.amountText) ?? 0)
             }
-        }
-
-        if let estimatedOtherDeduction,
-           estimatedOtherDeduction < 0 {
-            warnings.append(
-                "所得税・住民税・控除内訳の合計が、控除合計を \((-estimatedOtherDeduction).currencyText) 上回っています。"
-            )
-        }
-
-        return warnings
+        return AmountConsistencyValidator.warnings(
+            grossAmount: grossAmount,
+            netAmount: netAmount,
+            deductionAmount: deductionAmount,
+            itemizedDeductionTotal: itemizedTotal
+        )
     }
 
     private func documentLabel(_ document: DocumentAttachment) -> some View {
@@ -653,6 +687,11 @@ struct PayRecordFormView: View {
     }
 
     private func save(ignoringWarnings: Bool = false) {
+        guard !isRunningOCR else {
+            showValidation("書類の読み取りが完了してから保存してください。")
+            return
+        }
+
         guard let selectedEmployer else {
             showValidation("勤務先を選択してください。")
             return
@@ -768,6 +807,7 @@ struct PayRecordFormView: View {
 
         do {
             try modelContext.save()
+            pendingDocumentFileURL = nil
             dismiss()
         } catch {
             modelContext.rollback()
@@ -798,7 +838,7 @@ struct PayRecordFormView: View {
                 return nil
             }
 
-            let normalizedName = normalizedSearchText(name)
+            let normalizedName = canonicalDeductionName(name)
             guard names.insert(normalizedName).inserted else {
                 showValidation("同じ名前の控除項目が重複しています。")
                 return nil
@@ -844,7 +884,7 @@ struct PayRecordFormView: View {
     ) -> EmployerDeductionTemplate {
         let existingTemplate = employer.deductionTemplates.first { template in
             template.templateKey == draft.templateKey ||
-                normalizedSearchText(template.displayName) == normalizedSearchText(draft.name)
+                canonicalDeductionName(template.displayName) == canonicalDeductionName(draft.name)
         }
 
         if let existingTemplate {
@@ -921,7 +961,18 @@ struct PayRecordFormView: View {
         let newFileURL = DocumentFileStore.fileURL(forLocalFilePath: storedFile.localFilePath)
 
         if pendingDocumentFileURL != newFileURL {
-            DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+            do {
+                try DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+            } catch {
+                do {
+                    try DocumentFileStore.deleteFile(at: newFileURL)
+                } catch {
+                    showValidation("以前の添付ファイルと新しいファイルを整理できませんでした。アプリを再起動して、もう一度お試しください。")
+                    return
+                }
+                showValidation("以前の添付ファイルを整理できないため、差し替えを中止しました。もう一度お試しください。")
+                return
+            }
         }
 
         pendingDocumentLocalFilePath = storedFile.localFilePath
@@ -945,35 +996,43 @@ struct PayRecordFormView: View {
         isRunningOCR = true
         ocrStatusMessage = nil
 
-        Task {
+        Task { @MainActor in
             do {
-                let candidate = try await OCRExtractionService.extractPayRecordCandidate(
+                let initialEmployer = selectedEmployer
+                var candidate = try await OCRExtractionService.extractPayRecordCandidate(
                     from: fileURL,
                     fileType: fileType,
-                    deductionFieldSpecs: ocrDeductionFieldSpecs
+                    deductionFieldSpecs: ocrDeductionFieldSpecs(for: initialEmployer)
                 )
-                await MainActor.run {
-                    guard pendingDocumentFileURL == fileURL else {
-                        return
-                    }
 
-                    isRunningOCR = false
-                    if candidate.hasUsableValue {
-                        applyOCRCandidate(candidate)
-                    } else {
-                        ocrStatusMessage = "文字は読み取りましたが、支給年月や金額の候補を特定できませんでした。必要な項目は手入力してください。"
-                    }
+                if initialEmployer == nil,
+                   let detectedEmployer = suggestedEmployer(for: candidate),
+                   detectedEmployer.deductionTemplates.contains(where: \.isActive) {
+                    candidate = try await OCRExtractionService.extractPayRecordCandidate(
+                        from: fileURL,
+                        fileType: fileType,
+                        deductionFieldSpecs: ocrDeductionFieldSpecs(for: detectedEmployer)
+                    )
+                }
+
+                guard pendingDocumentFileURL == fileURL else {
+                    return
+                }
+
+                isRunningOCR = false
+                if candidate.hasUsableValue {
+                    applyOCRCandidate(candidate)
+                } else {
+                    ocrStatusMessage = "文字は読み取りましたが、支給年月や金額の候補を特定できませんでした。必要な項目は手入力してください。"
                 }
             } catch {
-                await MainActor.run {
-                    guard pendingDocumentFileURL == fileURL else {
-                        return
-                    }
-
-                    isRunningOCR = false
-                    let reason = error.localizedDescription
-                    ocrStatusMessage = "書類を読み取れませんでした。\(reason)"
+                guard pendingDocumentFileURL == fileURL else {
+                    return
                 }
+
+                isRunningOCR = false
+                let reason = error.localizedDescription
+                ocrStatusMessage = "書類を読み取れませんでした。\(reason)"
             }
         }
     }
@@ -1033,7 +1092,7 @@ struct PayRecordFormView: View {
                     draft.templateKey == $0
                 } ?? false
                 return matchesTemplate ||
-                    normalizedSearchText(draft.name) == normalizedSearchText(customCandidate.displayName)
+                    canonicalDeductionName(draft.name) == canonicalDeductionName(customCandidate.displayName)
             }) {
                 deductionDrafts[index].amountText = amount.formText
                 deductionDrafts[index].inputSource = .ocr
@@ -1144,7 +1203,12 @@ struct PayRecordFormView: View {
 
     private func cancel() {
         if payRecord == nil {
-            DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+            do {
+                try DocumentFileStore.deleteFile(at: pendingDocumentFileURL)
+            } catch {
+                showValidation("取り込み中の添付ファイルを整理できませんでした。アプリを再起動して、もう一度キャンセルしてください。")
+                return
+            }
         }
         dismiss()
     }
@@ -1184,7 +1248,7 @@ struct PayRecordFormView: View {
 
     private func mergeDeductionTemplates(from employer: Employer) {
         let existingTemplateKeys = Set(deductionDrafts.compactMap(\.templateKey))
-        let existingNames = Set(deductionDrafts.map { normalizedSearchText($0.name) })
+        let existingNames = Set(deductionDrafts.map { canonicalDeductionName($0.name) })
         let additions = employer.deductionTemplates
             .filter(\.isActive)
             .sorted {
@@ -1195,7 +1259,7 @@ struct PayRecordFormView: View {
             }
             .filter {
                 !existingTemplateKeys.contains($0.templateKey) &&
-                    !existingNames.contains(normalizedSearchText($0.displayName))
+                    !existingNames.contains(canonicalDeductionName($0.displayName))
             }
             .map {
                 DeductionDraft(templateKey: $0.templateKey, name: $0.displayName)
@@ -1203,10 +1267,10 @@ struct PayRecordFormView: View {
         deductionDrafts.append(contentsOf: additions)
     }
 
-    private var ocrDeductionFieldSpecs: [OCRDeductionFieldSpec] {
+    private func ocrDeductionFieldSpecs(for employer: Employer?) -> [OCRDeductionFieldSpec] {
         var specs: [OCRDeductionFieldSpec] = []
         var knownNames = Set<String>()
-        let sourceEmployers = selectedEmployer.map { [$0] } ?? employers
+        let sourceEmployers = employer.map { [$0] } ?? []
         let templates = sourceEmployers
             .flatMap(\.deductionTemplates)
             .sorted {
@@ -1216,7 +1280,7 @@ struct PayRecordFormView: View {
                 return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
             }
         for template in templates where template.isActive {
-            let normalizedName = normalizedSearchText(template.displayName)
+            let normalizedName = canonicalDeductionName(template.displayName)
             guard knownNames.insert(normalizedName).inserted else {
                 continue
             }
@@ -1236,7 +1300,7 @@ struct PayRecordFormView: View {
             "雇用保険", "共済掛金", "組合費", "財形", "社宅費"
         ]
         specs.append(contentsOf: commonNames.enumerated().compactMap { index, name in
-            guard !knownNames.contains(normalizedSearchText(name)) else {
+            guard knownNames.insert(canonicalDeductionName(name)).inserted else {
                 return nil
             }
             return OCRDeductionFieldSpec(
@@ -1248,6 +1312,10 @@ struct PayRecordFormView: View {
             )
         })
         return specs
+    }
+
+    private func canonicalDeductionName(_ name: String) -> String {
+        DeductionNameNormalizer.canonicalKey(name)
     }
 
     private func normalizedAmountText(from text: String) -> String {
@@ -1288,476 +1356,4 @@ private extension Int {
     var currencyText: String {
         "\(formText)円"
     }
-}
-
-private struct OCRCandidateReviewView: View {
-    let candidate: OCRPayRecordCandidate
-    let employers: [Employer]
-    let fileURL: URL?
-    let fileType: AttachmentFileType
-    let fileTitle: String
-    let onCancel: () -> Void
-    let onApply: (
-        Set<OCRField>,
-        [OCRField: Int],
-        Set<UUID>,
-        [UUID: Int],
-        PersistentIdentifier?
-    ) -> Void
-
-    @State private var selectedEmployerID: PersistentIdentifier?
-    @State private var usePaymentDate: Bool
-    @State private var useGrossAmount: Bool
-    @State private var useNetAmount: Bool
-    @State private var useDeductionAmount: Bool
-    @State private var useIncomeTaxAmount: Bool
-    @State private var useResidentTaxAmount: Bool
-    @State private var selectedCustomDeductionIDs: Set<UUID>
-    @State private var amountTexts: [OCRField: String]
-    @State private var customDeductionAmountTexts: [UUID: String]
-    @FocusState private var isEditingAmount: Bool
-
-    init(
-        candidate: OCRPayRecordCandidate,
-        employers: [Employer],
-        suggestedEmployerID: PersistentIdentifier?,
-        fileURL: URL?,
-        fileType: AttachmentFileType,
-        fileTitle: String,
-        onCancel: @escaping () -> Void,
-        onApply: @escaping (
-            Set<OCRField>,
-            [OCRField: Int],
-            Set<UUID>,
-            [UUID: Int],
-            PersistentIdentifier?
-        ) -> Void
-    ) {
-        self.candidate = candidate
-        self.employers = employers
-        self.fileURL = fileURL
-        self.fileType = fileType
-        self.fileTitle = fileTitle
-        self.onCancel = onCancel
-        self.onApply = onApply
-        _selectedEmployerID = State(initialValue: suggestedEmployerID)
-        _usePaymentDate = State(
-            initialValue: candidate.paymentDateCandidate?.isInitiallySelected ?? false
-        )
-        _useGrossAmount = State(
-            initialValue: candidate.grossCandidate?.isInitiallySelected ?? false
-        )
-        _useNetAmount = State(
-            initialValue: candidate.netCandidate?.isInitiallySelected ?? false
-        )
-        _useDeductionAmount = State(
-            initialValue: candidate.deductionCandidate?.isInitiallySelected ?? false
-        )
-        _useIncomeTaxAmount = State(
-            initialValue: candidate.incomeTaxCandidate?.isInitiallySelected ?? false
-        )
-        _useResidentTaxAmount = State(
-            initialValue: candidate.residentTaxCandidate?.isInitiallySelected ?? false
-        )
-        _selectedCustomDeductionIDs = State(
-            initialValue: Set(
-                candidate.customDeductionCandidates
-                    .filter { $0.amountCandidate.isInitiallySelected }
-                    .map(\.id)
-            )
-        )
-        _amountTexts = State(initialValue: [
-            .grossAmount: candidate.grossAmount?.formText ?? "",
-            .netAmount: candidate.netAmount?.formText ?? "",
-            .deductionAmount: candidate.deductionAmount?.formText ?? "",
-            .incomeTaxAmount: candidate.incomeTaxAmount?.formText ?? "",
-            .residentTaxAmount: candidate.residentTaxAmount?.formText ?? ""
-        ])
-        _customDeductionAmountTexts = State(
-            initialValue: Dictionary(
-                uniqueKeysWithValues: candidate.customDeductionCandidates.map {
-                    ($0.id, $0.amountCandidate.value.formText)
-                }
-            )
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("書類から読み取った入力候補です。使う項目だけを選び、原本と照合してから反映してください。確信度が低い候補は「要確認」と表示します。推定値は初期選択していません。")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let fileURL {
-                    Section("原本") {
-                        NavigationLink {
-                            DocumentPreviewView(
-                                title: fileTitle,
-                                fileType: fileType,
-                                fileURL: fileURL
-                            )
-                        } label: {
-                            Label("書類を確認", systemImage: "doc.text.magnifyingglass")
-                        }
-                    }
-                }
-
-                Section("勤務先") {
-                    if employers.isEmpty {
-                        Text("勤務先が未登録です。候補を反映した後、勤務先を追加してください。")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("勤務先（必須）", selection: $selectedEmployerID) {
-                            Text("後で選択").tag(Optional<PersistentIdentifier>.none)
-                            ForEach(employers) { employer in
-                                Text(employer.name).tag(Optional(employer.persistentModelID))
-                            }
-                        }
-                    }
-                }
-
-                Section("読み取り候補") {
-                    candidateSelectionRow(
-                        title: "支給年月",
-                        value: paymentDateText,
-                        confidenceText: confidenceText(candidate.paymentDateCandidate?.confidence),
-                        sourceText: candidate.paymentDateCandidate?.sourceText,
-                        isSelected: $usePaymentDate
-                    )
-                    editableAmountCandidateRow(
-                        title: "総支給額（額面）",
-                        field: .grossAmount,
-                        candidate: candidate.grossCandidate,
-                        isSelected: $useGrossAmount
-                    )
-                    editableAmountCandidateRow(
-                        title: "振込額（手取り）",
-                        field: .netAmount,
-                        candidate: candidate.netCandidate,
-                        isSelected: $useNetAmount
-                    )
-                    editableAmountCandidateRow(
-                        title: "控除合計",
-                        field: .deductionAmount,
-                        candidate: candidate.deductionCandidate,
-                        isSelected: $useDeductionAmount
-                    )
-                    editableAmountCandidateRow(
-                        title: "所得税",
-                        field: .incomeTaxAmount,
-                        candidate: candidate.incomeTaxCandidate,
-                        isSelected: $useIncomeTaxAmount
-                    )
-                    editableAmountCandidateRow(
-                        title: "住民税",
-                        field: .residentTaxAmount,
-                        candidate: candidate.residentTaxCandidate,
-                        isSelected: $useResidentTaxAmount
-                    )
-                }
-
-                if !candidate.customDeductionCandidates.isEmpty {
-                    Section {
-                        ForEach(candidate.customDeductionCandidates) { customCandidate in
-                            editableCustomDeductionRow(
-                                title: customCandidate.displayName,
-                                candidate: customCandidate,
-                                isSelected: Binding(
-                                    get: { selectedCustomDeductionIDs.contains(customCandidate.id) },
-                                    set: { isSelected in
-                                        if isSelected {
-                                            selectedCustomDeductionIDs.insert(customCandidate.id)
-                                        } else {
-                                            selectedCustomDeductionIDs.remove(customCandidate.id)
-                                        }
-                                    }
-                                )
-                            )
-                        }
-                    } header: {
-                        Text("勤務先固有の控除")
-                    } footer: {
-                        Text("反映して保存した項目は勤務先ごとに記憶し、次回のOCR候補に使います。")
-                    }
-                }
-
-                if candidate.deductionCandidate?.isInferred == true {
-                    Section {
-                        Label(
-                            "控除合計は、総支給額と振込額の差から推定した候補です。原本に控除合計の記載がある場合は、その金額を優先してください。",
-                            systemImage: "exclamationmark.triangle"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("読み取り結果")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("使わない", action: onCancel)
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("フォームに反映") {
-                        onApply(
-                            selectedFields,
-                            amountOverrides,
-                            selectedCustomDeductionIDs,
-                            customDeductionAmountOverrides,
-                            selectedEmployerID
-                        )
-                    }
-                    .disabled(
-                        (selectedFields.isEmpty && selectedCustomDeductionIDs.isEmpty) ||
-                            hasInvalidSelectedAmount
-                    )
-                }
-
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("完了") {
-                        isEditingAmount = false
-                    }
-                }
-            }
-        }
-    }
-
-    private var selectedFields: Set<OCRField> {
-        var fields = Set<OCRField>()
-        if selectedEmployerID != nil {
-            fields.insert(.employer)
-        }
-        if usePaymentDate, candidate.paymentDateCandidate != nil {
-            fields.insert(.paymentDate)
-        }
-        if useGrossAmount, candidate.grossCandidate != nil {
-            fields.insert(.grossAmount)
-        }
-        if useNetAmount, candidate.netCandidate != nil {
-            fields.insert(.netAmount)
-        }
-        if useDeductionAmount, candidate.deductionCandidate != nil {
-            fields.insert(.deductionAmount)
-        }
-        if useIncomeTaxAmount, candidate.incomeTaxCandidate != nil {
-            fields.insert(.incomeTaxAmount)
-        }
-        if useResidentTaxAmount, candidate.residentTaxCandidate != nil {
-            fields.insert(.residentTaxAmount)
-        }
-        return fields
-    }
-
-    private var paymentDateText: String? {
-        guard let year = candidate.paymentYear,
-              let month = candidate.paymentMonth else {
-            return nil
-        }
-        return "\(year)年\(month)月"
-    }
-
-    @ViewBuilder
-    private func candidateSelectionRow(
-        title: String,
-        value: String?,
-        confidenceText: String?,
-        sourceText: String?,
-        isSelected: Binding<Bool>
-    ) -> some View {
-        if value == nil {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("候補なし")
-                    .foregroundStyle(.secondary)
-            }
-        } else {
-            Toggle(isOn: isSelected) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        Text(title)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        if let confidenceText {
-                            Text(confidenceText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(confidenceText.contains("要確認") ? .orange : .cyan)
-                        }
-                    }
-
-                    Text(value ?? "")
-                        .font(.body.weight(.semibold))
-                        .monospacedDigit()
-
-                    if let sourceText, !sourceText.isEmpty {
-                        Text("根拠: \(sourceText)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func editableAmountCandidateRow(
-        title: String,
-        field: OCRField,
-        candidate: OCRAmountCandidate?,
-        isSelected: Binding<Bool>
-    ) -> some View {
-        if let candidate {
-            editableAmountRow(
-                title: title,
-                confidenceText: confidenceText(candidate),
-                sourceText: candidate.sourceText,
-                amountText: Binding(
-                    get: { amountTexts[field] ?? "" },
-                    set: { amountTexts[field] = groupedAmountText($0) }
-                ),
-                isSelected: isSelected
-            )
-        } else {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("候補なし")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func editableCustomDeductionRow(
-        title: String,
-        candidate: OCRCustomDeductionCandidate,
-        isSelected: Binding<Bool>
-    ) -> some View {
-        editableAmountRow(
-            title: title,
-            confidenceText: confidenceText(candidate.amountCandidate),
-            sourceText: candidate.amountCandidate.sourceText,
-            amountText: Binding(
-                get: { customDeductionAmountTexts[candidate.id] ?? "" },
-                set: { customDeductionAmountTexts[candidate.id] = groupedAmountText($0) }
-            ),
-            isSelected: isSelected
-        )
-    }
-
-    private func editableAmountRow(
-        title: String,
-        confidenceText: String?,
-        sourceText: String?,
-        amountText: Binding<String>,
-        isSelected: Binding<Bool>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle(isOn: isSelected) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    if let confidenceText {
-                        Text(confidenceText)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(confidenceText.contains("要確認") ? .orange : .cyan)
-                    }
-                }
-            }
-
-            HStack {
-                TextField("0", text: amountText)
-                    .keyboardType(.numberPad)
-                    .focused($isEditingAmount)
-                    .multilineTextAlignment(.trailing)
-                    .font(.body.weight(.semibold).monospacedDigit())
-                Text("円")
-                    .foregroundStyle(.secondary)
-            }
-
-            if let sourceText, !sourceText.isEmpty {
-                Text("根拠: \(sourceText)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private var amountOverrides: [OCRField: Int] {
-        Dictionary(uniqueKeysWithValues: amountTexts.compactMap { field, text in
-            parsedAmount(text).map { (field, $0) }
-        })
-    }
-
-    private var customDeductionAmountOverrides: [UUID: Int] {
-        Dictionary(uniqueKeysWithValues: customDeductionAmountTexts.compactMap { id, text in
-            parsedAmount(text).map { (id, $0) }
-        })
-    }
-
-    private var hasInvalidSelectedAmount: Bool {
-        let amountFields: [OCRField] = [
-            .grossAmount, .netAmount, .deductionAmount, .incomeTaxAmount, .residentTaxAmount
-        ]
-        if amountFields.contains(where: {
-            selectedFields.contains($0) && parsedAmount(amountTexts[$0] ?? "") == nil
-        }) {
-            return true
-        }
-
-        return selectedCustomDeductionIDs.contains {
-            parsedAmount(customDeductionAmountTexts[$0] ?? "") == nil
-        }
-    }
-
-    private func parsedAmount(_ text: String) -> Int? {
-        let normalized = text
-            .applyingTransform(.fullwidthToHalfwidth, reverse: false)?
-            .filter(\.isNumber) ?? text.filter(\.isNumber)
-        guard !normalized.isEmpty else {
-            return nil
-        }
-        return Int(normalized)
-    }
-
-    private func groupedAmountText(_ text: String) -> String {
-        guard let amount = parsedAmount(text) else {
-            return ""
-        }
-        return amount.formText
-    }
-
-    private func confidenceText(_ confidence: OCRCandidateConfidence?) -> String? {
-        guard let confidence, case .low = confidence else {
-            return nil
-        }
-        return "要確認"
-    }
-
-    private func confidenceText(_ candidate: OCRAmountCandidate?) -> String? {
-        guard let candidate else {
-            return nil
-        }
-        if candidate.isInferred {
-            return "推定・要確認"
-        }
-        guard case .low = candidate.confidence else {
-            return nil
-        }
-        return "要確認"
-    }
-
 }

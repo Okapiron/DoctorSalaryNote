@@ -217,7 +217,6 @@ struct AnalysisView: View {
     private var annualTrendContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             trendDataChart(points: annualTrendPoints, axisMax: annualAxisMax)
-                .gesture(yearSwipeGesture(keeping: .trend))
 
             VStack(spacing: 0) {
                 ForEach(annualSummaries) { summary in
@@ -241,7 +240,6 @@ struct AnalysisView: View {
                     .padding(.vertical, 24)
             } else {
                 trendDataChart(points: monthlyTrendPoints, axisMax: monthlyAxisMax)
-                    .gesture(yearSwipeGesture(keeping: .trend))
 
                 HStack {
                     Spacer()
@@ -433,7 +431,14 @@ struct AnalysisView: View {
     }
 
     private func trendDataChart(points: [TrendPoint], axisMax: Int) -> some View {
-        let linePoints = points.filter(\.hasNetAmount)
+        var segment = 0
+        let linePoints = points.compactMap { point -> TrendLinePoint? in
+            guard point.hasNetAmount else {
+                segment += 1
+                return nil
+            }
+            return TrendLinePoint(point: point, segment: segment)
+        }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 LegendDot(color: .cyan, text: "額面")
@@ -455,7 +460,8 @@ struct AnalysisView: View {
                 ForEach(linePoints) { point in
                     LineMark(
                         x: .value("期間", point.label),
-                        y: .value("手取り", point.netTotal)
+                        y: .value("手取り", point.netTotal),
+                        series: .value("連続区間", point.segment)
                     )
                     .foregroundStyle(.blue)
                     .interpolationMethod(.linear)
@@ -529,6 +535,15 @@ private struct TrendPoint: Identifiable {
     let grossTotal: Int
     let netTotal: Int
     let hasNetAmount: Bool
+}
+
+private struct TrendLinePoint: Identifiable {
+    let point: TrendPoint
+    let segment: Int
+
+    var id: String { "\(segment)-\(point.id)" }
+    var label: String { point.label }
+    var netTotal: Int { point.netTotal }
 }
 
 private enum AnalysisTrendScope: String, CaseIterable, Identifiable {

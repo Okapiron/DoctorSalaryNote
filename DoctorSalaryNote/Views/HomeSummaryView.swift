@@ -12,11 +12,7 @@ struct HomeSummaryView: View {
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingCurrentMonthRecord = false
 
-    private var latestMonthKey: MonthKey {
-        if let record = payRecords.first {
-            return MonthKey(year: record.paymentYear, month: record.paymentMonth)
-        }
-
+    private var currentMonthKey: MonthKey {
         let now = Date()
         let calendar = Calendar.current
         return MonthKey(
@@ -25,13 +21,32 @@ struct HomeSummaryView: View {
         )
     }
 
+    private var latestMonthKey: MonthKey {
+        if let record = payRecords.first {
+            return MonthKey(year: record.paymentYear, month: record.paymentMonth)
+        }
+
+        return currentMonthKey
+    }
+
     private var recentMonthSummaries: [HomeMonthSummary] {
         (0..<6).reversed().map { offset in
-            let key = latestMonthKey.addingMonths(-offset)
+            let key = currentMonthKey.addingMonths(-offset)
             let records = payRecords.filter {
                 $0.paymentYear == key.year && $0.paymentMonth == key.month
             }
             return HomeMonthSummary(key: key, records: records)
+        }
+    }
+
+    private var recentMonthLinePoints: [HomeTrendLinePoint] {
+        var segment = 0
+        return recentMonthSummaries.compactMap { summary in
+            guard summary.hasNetAmount else {
+                segment += 1
+                return nil
+            }
+            return HomeTrendLinePoint(summary: summary, segment: segment)
         }
     }
 
@@ -119,7 +134,7 @@ struct HomeSummaryView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader(
                     title: "直近の月別給与",
-                    subtitle: "最近6か月の額面と手取り",
+                    subtitle: "今月まで6か月の額面と手取り",
                     systemImage: "chart.bar.xaxis"
                 )
 
@@ -141,10 +156,11 @@ struct HomeSummaryView: View {
                             .cornerRadius(4)
                         }
 
-                        ForEach(recentMonthSummaries.filter(\.hasNetAmount)) { summary in
+                        ForEach(recentMonthLinePoints) { summary in
                             LineMark(
                                 x: .value("月", summary.shortLabel),
-                                y: .value("手取り", summary.netTotal)
+                                y: .value("手取り", summary.netTotal),
+                                series: .value("連続区間", summary.segment)
                             )
                             .foregroundStyle(.blue)
                             .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
@@ -190,12 +206,18 @@ struct HomeSummaryView: View {
                 }
 
                 HStack(spacing: 16) {
-                    latestMonthAmount("額面", yenText(latestMonthSummary.grossTotal))
+                    latestMonthAmount(
+                        "額面",
+                        latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal)
+                    )
 
                     Divider()
                         .frame(height: 36)
 
-                    latestMonthAmount("手取り", latestMonthSummary.netDisplayText)
+                    latestMonthAmount(
+                        "手取り",
+                        latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText
+                    )
                 }
             }
         }
@@ -349,6 +371,15 @@ private struct HomeMonthSummary: Identifiable {
     var netDisplayText: String { hasNetAmount ? yenText(netTotal) : "未入力" }
     var deductionTotal: Int { records.reduce(0) { $0 + $1.deductionTotalForAggregation } }
 
+}
+
+private struct HomeTrendLinePoint: Identifiable {
+    let summary: HomeMonthSummary
+    let segment: Int
+
+    var id: String { "\(segment)-\(summary.key.year)-\(summary.key.month)" }
+    var shortLabel: String { summary.shortLabel }
+    var netTotal: Int { summary.netTotal }
 }
 
 private struct HomeYearSummary {

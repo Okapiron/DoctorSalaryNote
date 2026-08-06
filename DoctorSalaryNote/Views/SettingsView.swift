@@ -284,13 +284,17 @@ struct SettingsView: View {
         do {
             try modelContext.save()
             UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
-            documentFileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
-            DocumentFileStore.deleteAllFiles()
             selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil
             securityMessage = nil
-            deleteMessage = "すべてのデータを削除しました。"
+            do {
+                try DocumentFileStore.deleteFiles(at: documentFileURLs)
+                try DocumentFileStore.deleteAllFiles()
+                deleteMessage = "すべてのデータを削除しました。"
+            } catch {
+                deleteMessage = "登録データは削除しましたが、一部の添付ファイルを端末から削除できませんでした。アプリを再起動して、もう一度全データ削除を実行してください。"
+            }
         } catch {
             modelContext.rollback()
             deleteMessage = "データ削除中にエラーが発生しました。もう一度お試しください。"

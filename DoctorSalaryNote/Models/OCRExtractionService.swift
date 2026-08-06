@@ -360,19 +360,12 @@ enum OCRExtractionService {
         for candidate in candidates {
             let sourceText = normalizeJapaneseText(candidate.amountCandidate.sourceText)
             if let duplicateIndex = result.firstIndex(where: {
-                $0.amountCandidate.value == candidate.amountCandidate.value &&
-                    normalizeJapaneseText($0.amountCandidate.sourceText) == sourceText
+                canonicalDeductionKey($0.displayName) == canonicalDeductionKey(candidate.displayName) ||
+                    ($0.amountCandidate.value == candidate.amountCandidate.value &&
+                        normalizeJapaneseText($0.amountCandidate.sourceText) == sourceText)
             }) {
                 let existing = result[duplicateIndex]
-                let existingPosition = sourceText.range(
-                    of: normalizeJapaneseText(existing.displayName)
-                )?.lowerBound
-                let candidatePosition = sourceText.range(
-                    of: normalizeJapaneseText(candidate.displayName)
-                )?.lowerBound
-
-                if let candidatePosition,
-                   existingPosition == nil || candidatePosition < existingPosition! {
+                if shouldPreferCustomDeduction(candidate, over: existing, sourceText: sourceText) {
                     result[duplicateIndex] = candidate
                 }
             } else {
@@ -381,6 +374,39 @@ enum OCRExtractionService {
         }
 
         return result
+    }
+
+    private static func shouldPreferCustomDeduction(
+        _ candidate: OCRCustomDeductionCandidate,
+        over existing: OCRCustomDeductionCandidate,
+        sourceText: String
+    ) -> Bool {
+        let confidenceDifference = candidate.amountCandidate.confidenceScore -
+            existing.amountCandidate.confidenceScore
+        if abs(confidenceDifference) > 0.02 {
+            return confidenceDifference > 0
+        }
+        if candidate.templateKey != nil, existing.templateKey == nil {
+            return true
+        }
+        if candidate.sortPriority != existing.sortPriority {
+            return candidate.sortPriority < existing.sortPriority
+        }
+
+        let existingPosition = sourceText.range(
+            of: normalizeJapaneseText(existing.displayName)
+        )?.lowerBound
+        let candidatePosition = sourceText.range(
+            of: normalizeJapaneseText(candidate.displayName)
+        )?.lowerBound
+        if let candidatePosition {
+            return existingPosition == nil || candidatePosition < existingPosition!
+        }
+        return false
+    }
+
+    private static func canonicalDeductionKey(_ name: String) -> String {
+        DeductionNameNormalizer.canonicalKey(name)
     }
 
     private static func embeddedPDFTextLines(from fileURL: URL) -> [RecognizedLine] {

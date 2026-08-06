@@ -62,25 +62,35 @@ enum DocumentFileStore {
         return fallbackURL
     }
 
-    static func deleteFile(for attachment: DocumentAttachment) {
-        deleteFile(at: fileURL(for: attachment))
+    static func deleteFile(for attachment: DocumentAttachment) throws {
+        try deleteFile(at: fileURL(for: attachment))
     }
 
-    static func deleteFile(at fileURL: URL?) {
+    static func deleteFile(at fileURL: URL?) throws {
         guard let fileURL else {
             return
         }
 
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
-    static func deleteAllFiles() {
-        guard let directory = try? attachmentsDirectory(),
-              FileManager.default.fileExists(atPath: directory.path) else {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return
         }
 
-        try? FileManager.default.removeItem(at: directory)
+        try FileManager.default.removeItem(at: fileURL)
+    }
+
+    static func deleteFiles(at fileURLs: [URL]) throws {
+        for fileURL in fileURLs {
+            try deleteFile(at: fileURL)
+        }
+    }
+
+    static func deleteAllFiles() throws {
+        let directory = try documentsDirectory().appendingPathComponent(directoryName, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directory.path) else {
+            return
+        }
+
+        try FileManager.default.removeItem(at: directory)
     }
 
     static func fileURL(forLocalFilePath localFilePath: String) -> URL? {

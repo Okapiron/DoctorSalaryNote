@@ -322,7 +322,14 @@ struct DocumentFormView: View {
 
         do {
             try modelContext.save()
-            DocumentFileStore.deleteFile(at: pendingOldFileURLToDelete)
+            pendingNewFileURL = nil
+            do {
+                try DocumentFileStore.deleteFile(at: pendingOldFileURLToDelete)
+                pendingOldFileURLToDelete = nil
+            } catch {
+                showValidation("書類情報は保存しましたが、差し替え前のファイルを整理できませんでした。もう一度保存を押して再試行してください。")
+                return
+            }
             dismiss()
         } catch {
             modelContext.rollback()
@@ -388,10 +395,20 @@ struct DocumentFormView: View {
         let newFileURL = DocumentFileStore.fileURL(forLocalFilePath: storedFile.localFilePath)
 
         if let pendingNewFileURL, pendingNewFileURL != newFileURL {
-            DocumentFileStore.deleteFile(at: pendingNewFileURL)
+            do {
+                try DocumentFileStore.deleteFile(at: pendingNewFileURL)
+            } catch {
+                cleanupRejectedReplacementFile(newFileURL)
+                return
+            }
         } else if let previousFileURL = previewFileURL, previousFileURL != newFileURL {
             if document == nil {
-                DocumentFileStore.deleteFile(at: previousFileURL)
+                do {
+                    try DocumentFileStore.deleteFile(at: previousFileURL)
+                } catch {
+                    cleanupRejectedReplacementFile(newFileURL)
+                    return
+                }
             } else {
                 pendingOldFileURLToDelete = previousFileURL
             }
@@ -408,8 +425,22 @@ struct DocumentFormView: View {
     }
 
     private func cancel() {
-        DocumentFileStore.deleteFile(at: pendingNewFileURL)
+        do {
+            try DocumentFileStore.deleteFile(at: pendingNewFileURL)
+        } catch {
+            showValidation("選択中の新しいファイルを整理できませんでした。アプリを再起動して、もう一度キャンセルしてください。")
+            return
+        }
         dismiss()
+    }
+
+    private func cleanupRejectedReplacementFile(_ fileURL: URL?) {
+        do {
+            try DocumentFileStore.deleteFile(at: fileURL)
+            showValidation("以前のファイルを整理できないため、差し替えを中止しました。もう一度お試しください。")
+        } catch {
+            showValidation("以前のファイルと新しいファイルを整理できませんでした。アプリを再起動して、もう一度お試しください。")
+        }
     }
 
     private func payRecordLabel(_ record: PayRecord) -> String {

@@ -22,7 +22,7 @@ struct DocumentListView: View {
 
     @State private var selectedYear = Calendar.current.component(.year, from: Date())
     @State private var isAddingDocument = false
-    @State private var selectedSummaryID: Int?
+    @State private var selectedSummaryID: DocumentSummaryID?
     @State private var deletionErrorMessage: String?
 
     private var yearPayRecords: [PayRecord] {
@@ -219,8 +219,8 @@ struct DocumentListView: View {
         )
     }
 
-    private func summaryID(for employer: Employer?) -> Int {
-        employer?.persistentModelID.hashValue ?? -1
+    private func summaryID(for employer: Employer?) -> DocumentSummaryID {
+        employer.map { .employer($0.persistentModelID) } ?? .unassigned
     }
 
     private func deleteDocuments(at offsets: IndexSet) {
@@ -233,7 +233,11 @@ struct DocumentListView: View {
 
         do {
             try modelContext.save()
-            fileURLs.forEach { DocumentFileStore.deleteFile(at: $0) }
+            do {
+                try DocumentFileStore.deleteFiles(at: fileURLs)
+            } catch {
+                deletionErrorMessage = "書類情報は削除しましたが、端末内のファイルを整理できませんでした。アプリを再起動して、もう一度お試しください。"
+            }
         } catch {
             modelContext.rollback()
             deletionErrorMessage = "書類を削除できませんでした。データを確認して、もう一度お試しください。"
@@ -242,7 +246,7 @@ struct DocumentListView: View {
 }
 
 private struct DocumentWorkplaceSummary: Identifiable {
-    let id: Int
+    let id: DocumentSummaryID
     let employer: Employer?
     let employerName: String
     let payRecordCount: Int
@@ -250,6 +254,11 @@ private struct DocumentWorkplaceSummary: Identifiable {
     let grossTotal: Int
     let withholdingStatus: DocumentStatus
     let paymentStatementStatus: DocumentStatus
+}
+
+private enum DocumentSummaryID: Hashable {
+    case employer(PersistentIdentifier)
+    case unassigned
 }
 
 private enum DocumentStatus: Equatable {
@@ -268,7 +277,7 @@ private enum DocumentStatus: Equatable {
     var paymentStatementLabel: String {
         switch self {
         case .registered: "あり"
-        case .missing, .none: "なし"
+        case .missing, .none: "なし（任意）"
         }
     }
 
@@ -283,7 +292,7 @@ private enum DocumentStatus: Equatable {
     var paymentStatementColor: Color {
         switch self {
         case .registered: .green
-        case .missing, .none: .orange
+        case .missing, .none: .secondary
         }
     }
 }
