@@ -215,6 +215,11 @@ struct PayRecordFormView: View {
 
                 ForEach($deductionDrafts) { $draft in
                     deductionDraftRow(draft: $draft)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button("削除", role: .destructive) {
+                                deductionDrafts.removeAll { $0.id == draft.id }
+                            }
+                        }
                 }
 
                 Button {
@@ -544,14 +549,6 @@ struct PayRecordFormView: View {
             .multilineTextAlignment(.trailing)
             .font(.body.monospacedDigit())
             .frame(maxWidth: 120)
-
-            Button(role: .destructive) {
-                deductionDrafts.removeAll { $0.id == draft.wrappedValue.id }
-            } label: {
-                Image(systemName: "minus.circle")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("控除項目を削除")
         }
     }
 
@@ -957,7 +954,10 @@ struct PayRecordFormView: View {
         for customCandidate in candidate.customDeductionCandidates
             where selectedCustomDeductionIDs.contains(customCandidate.id) {
             if let index = deductionDrafts.firstIndex(where: { draft in
-                draft.templateKey == customCandidate.templateKey ||
+                let matchesTemplate = customCandidate.templateKey.map {
+                    draft.templateKey == $0
+                } ?? false
+                return matchesTemplate ||
                     normalizedSearchText(draft.name) == normalizedSearchText(customCandidate.displayName)
             }) {
                 deductionDrafts[index].amountText = customCandidate.amountCandidate.value.formText
