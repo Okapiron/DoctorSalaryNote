@@ -51,7 +51,7 @@ struct OCRAmountCandidate {
     }
 
     var isInitiallySelected: Bool {
-        confidenceScore >= 0.62 && !isInferred
+        !isInferred
     }
 }
 
@@ -66,7 +66,7 @@ struct OCRPaymentDateCandidate {
     }
 
     var isInitiallySelected: Bool {
-        confidenceScore >= 0.62
+        true
     }
 }
 

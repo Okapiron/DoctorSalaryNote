@@ -5,6 +5,12 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+private struct PendingOCRApplication {
+    let candidate: OCRPayRecordCandidate
+    let selectedFields: Set<OCRField>
+    let employerID: PersistentIdentifier?
+}
+
 struct PayRecordFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -54,6 +60,7 @@ struct PayRecordFormView: View {
     @State private var ocrStatusMessage: String?
     @State private var availableOCRCandidate: OCRPayRecordCandidate?
     @State private var ocrCandidateForReview: OCRPayRecordCandidate?
+    @State private var pendingOCRApplication: PendingOCRApplication?
 
     init(
         payRecord: PayRecord? = nil,
@@ -254,7 +261,7 @@ struct PayRecordFormView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(item: $ocrCandidateForReview) { candidate in
+        .sheet(item: $ocrCandidateForReview, onDismiss: applyPendingOCRApplication) { candidate in
             OCRCandidateReviewView(
                 candidate: candidate,
                 employers: selectableEmployers,
@@ -263,15 +270,15 @@ struct PayRecordFormView: View {
                 fileType: pendingDocumentFileType,
                 fileTitle: pendingDocumentOriginalFileName ?? pendingDocumentType.label,
                 onCancel: {
+                    pendingOCRApplication = nil
                     ocrCandidateForReview = nil
                 },
                 onApply: { selectedFields, employerID in
-                    applyOCRCandidate(
-                        candidate,
+                    pendingOCRApplication = PendingOCRApplication(
+                        candidate: candidate,
                         selectedFields: selectedFields,
                         employerID: employerID
                     )
-                    availableOCRCandidate = nil
                     ocrCandidateForReview = nil
                 }
             )
@@ -708,7 +715,36 @@ struct PayRecordFormView: View {
         }
 
         validationMessage = nil
-        ocrStatusMessage = "選択した候補をフォームへ反映しました。内容を照合し、右上の「保存」を押してください。"
+        let appliedFields = appliedFieldLabels(for: selectedFields)
+        ocrStatusMessage = "フォームに反映しました（\(appliedFields)）。内容を照合し、右上の「保存」を押してください。"
+    }
+
+    private func applyPendingOCRApplication() {
+        guard let application = pendingOCRApplication else {
+            return
+        }
+
+        applyOCRCandidate(
+            application.candidate,
+            selectedFields: application.selectedFields,
+            employerID: application.employerID
+        )
+        availableOCRCandidate = nil
+        pendingOCRApplication = nil
+    }
+
+    private func appliedFieldLabels(for selectedFields: Set<OCRField>) -> String {
+        let orderedFields: [(OCRField, String)] = [
+            (.employer, "勤務先"),
+            (.paymentDate, "支給年月"),
+            (.grossAmount, "額面"),
+            (.netAmount, "手取り"),
+            (.deductionAmount, "控除合計")
+        ]
+        let labels = orderedFields.compactMap { field, label in
+            selectedFields.contains(field) ? label : nil
+        }
+        return labels.joined(separator: "・")
     }
 
     private func presentOCRCandidate(_ candidate: OCRPayRecordCandidate) {
