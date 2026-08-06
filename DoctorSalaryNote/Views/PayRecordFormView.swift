@@ -1110,14 +1110,23 @@ private struct OCRCandidateReviewView: View {
     }
 
     private func confidenceText(_ confidence: OCRCandidateConfidence?) -> String? {
-        confidence?.label
+        guard let confidence, case .low = confidence else {
+            return nil
+        }
+        return "要確認"
     }
 
     private func confidenceText(_ candidate: OCRAmountCandidate?) -> String? {
         guard let candidate else {
             return nil
         }
-        return candidate.isInferred ? "推定・要確認" : candidate.confidence.label
+        if candidate.isInferred {
+            return "推定・要確認"
+        }
+        guard case .low = candidate.confidence else {
+            return nil
+        }
+        return "要確認"
     }
 
     private func amountText(_ amount: Int?) -> String? {
