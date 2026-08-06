@@ -19,6 +19,7 @@ struct OCRDeductionFieldSpec: Sendable {
     let templateKey: UUID?
     let displayName: String
     let keywords: [String]
+    let sortPriority: Int
 }
 
 enum OCRCandidateConfidence {
@@ -84,6 +85,7 @@ struct OCRCustomDeductionCandidate: Identifiable {
     let templateKey: UUID?
     let displayName: String
     let amountCandidate: OCRAmountCandidate
+    let sortPriority: Int
 }
 
 struct OCRPayRecordCandidate: Identifiable {
@@ -283,10 +285,20 @@ enum OCRExtractionService {
                 id: spec.id,
                 templateKey: spec.templateKey,
                 displayName: spec.displayName,
-                amountCandidate: makeAmountCandidate(from: amount)
+                amountCandidate: makeAmountCandidate(from: amount),
+                sortPriority: spec.sortPriority
             )
         }
         let customDeductions = deduplicatedCustomDeductionCandidates(rawCustomDeductions)
+            .sorted {
+                if $0.sortPriority != $1.sortPriority {
+                    return $0.sortPriority < $1.sortPriority
+                }
+                if $0.amountCandidate.value != $1.amountCandidate.value {
+                    return $0.amountCandidate.value > $1.amountCandidate.value
+                }
+                return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+            }
 
         adjustConfidenceForArithmeticConsistency(
             gross: &gross,
@@ -701,7 +713,12 @@ enum OCRExtractionService {
                     continue
                 }
 
-                let baseScore = offset == 0 ? 0.68 : 0.54
+                let baseScore: Double
+                if field.kind == .deduction {
+                    baseScore = offset == 0 ? 0.97 : 0.55
+                } else {
+                    baseScore = offset == 0 ? 0.68 : 0.54
+                }
                 candidates.append(
                     ScoredAmount(
                         value: amount,
@@ -852,12 +869,12 @@ enum OCRExtractionService {
 
             let distancePenalty: Double
             let baseScore: Double
-            if isToRight {
-                baseScore = 0.97
-                distancePenalty = min(0.14, max(0, box.minX - labelBox.maxX) * 0.18)
-            } else {
-                baseScore = 0.91
+            if isDirectlyBelow {
+                baseScore = 1.00
                 distancePenalty = min(0.16, verticalDistance * 0.9 + abs(box.midX - labelBox.midX) * 0.25)
+            } else {
+                baseScore = 0.86
+                distancePenalty = min(0.14, max(0, box.minX - labelBox.maxX) * 0.18)
             }
 
             return ScoredAmount(
