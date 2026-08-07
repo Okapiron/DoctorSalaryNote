@@ -28,6 +28,23 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .gray: .gray
         }
     }
+
+    var chartGrossColor: Color {
+        accentColor
+    }
+
+    var chartNetColor: Color {
+        switch self {
+        case .aqua:
+            .blue
+        case .pink:
+            Color(red: 0.62, green: 0.14, blue: 0.42)
+        case .green:
+            Color(red: 0.05, green: 0.38, blue: 0.24)
+        case .gray:
+            .primary
+        }
+    }
 }
 
 private struct AppThemeEnvironmentKey: EnvironmentKey {
@@ -151,6 +168,7 @@ struct ContentView: View {
                 Label("分析", systemImage: "chart.bar")
             }
         }
+        .tint(appTheme.accentColor)
     }
 
     private func authenticate() {

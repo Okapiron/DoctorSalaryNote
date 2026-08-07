@@ -154,7 +154,7 @@ struct HomeSummaryView: View {
                                 x: .value("月", summary.shortLabel),
                                 y: .value("額面", summary.grossTotal)
                             )
-                            .foregroundStyle(.cyan.gradient)
+                            .foregroundStyle(appTheme.chartGrossColor.gradient)
                             .cornerRadius(4)
                         }
 
@@ -164,14 +164,14 @@ struct HomeSummaryView: View {
                                 y: .value("手取り", summary.netTotal),
                                 series: .value("連続区間", summary.segment)
                             )
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(appTheme.chartNetColor)
                             .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
                             PointMark(
                                 x: .value("月", summary.shortLabel),
                                 y: .value("手取り", summary.netTotal)
                             )
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(appTheme.chartNetColor)
                         }
                     }
                     .chartYAxis {

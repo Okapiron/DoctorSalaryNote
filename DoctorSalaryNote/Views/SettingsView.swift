@@ -42,6 +42,7 @@ struct SettingsView: View {
             dataManagementSection
             informationSection
         }
+        .tint(selectedAppTheme.accentColor)
         .navigationTitle("設定")
         .onAppear(perform: ensureSettings)
         .confirmationDialog(
