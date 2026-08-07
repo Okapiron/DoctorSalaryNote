@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct EmployerListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
     @Query(sort: [
         SortDescriptor(\Employer.sortOrder),
         SortDescriptor(\Employer.name)
@@ -83,7 +84,7 @@ struct EmployerListView: View {
                         } label: {
                             Label("給与入力", systemImage: "yensign.circle")
                         }
-                        .tint(.teal)
+                        .tint(appTheme.accentColor)
                     }
                 }
                 .onMove(perform: moveEmployers)

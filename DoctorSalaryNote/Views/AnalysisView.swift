@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 
 struct AnalysisView: View {
+    @Environment(\.appTheme) private var appTheme
+
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
         SortDescriptor(\PayRecord.paymentMonth, order: .reverse),
@@ -353,7 +355,7 @@ struct AnalysisView: View {
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.background)
-                    .shadow(color: Color.cyan.opacity(0.08), radius: 10, y: 4)
+                    .shadow(color: appTheme.accentColor.opacity(0.10), radius: 10, y: 4)
             )
     }
 
@@ -398,7 +400,7 @@ struct AnalysisView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("翌年へ")
             }
-            .foregroundStyle(.cyan)
+            .foregroundStyle(appTheme.accentColor)
         }
     }
 

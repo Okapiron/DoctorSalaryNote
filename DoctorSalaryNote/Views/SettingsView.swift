@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(AppTheme.storageKey) private var storedAppTheme = AppTheme.aqua.rawValue
 
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
@@ -35,6 +36,7 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            appearanceSection
             securitySection
             csvSection
             dataManagementSection
@@ -59,6 +61,51 @@ struct SettingsView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("この操作は元に戻せません。保存済みの添付ファイルも削除されます。")
+        }
+    }
+
+    private var selectedAppTheme: AppTheme {
+        AppTheme(rawValue: storedAppTheme) ?? .aqua
+    }
+
+    private var appearanceSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                ForEach(AppTheme.allCases) { theme in
+                    Button {
+                        storedAppTheme = theme.rawValue
+                    } label: {
+                        VStack(spacing: 7) {
+                            ZStack {
+                                Circle()
+                                    .fill(theme.accentColor)
+                                    .frame(width: 34, height: 34)
+
+                                if selectedAppTheme == theme {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+
+                            Text(theme.label)
+                                .font(.caption2)
+                                .foregroundStyle(selectedAppTheme == theme ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(theme.label)テーマ")
+                    .accessibilityValue(selectedAppTheme == theme ? "選択中" : "")
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("テーマカラー")
+        } footer: {
+            Text("ボタンやタブ、主要アイコンの色を変更します。")
         }
     }
 
@@ -284,6 +331,7 @@ struct SettingsView: View {
         do {
             try modelContext.save()
             UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
+            storedAppTheme = AppTheme.aqua.rawValue
             selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil

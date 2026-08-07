@@ -30,6 +30,7 @@ private struct DeductionDraft: Identifiable {
 struct PayRecordFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
 
     @Query(sort: [
         SortDescriptor(\Employer.sortOrder),
@@ -556,7 +557,7 @@ struct PayRecordFormView: View {
     private var pendingDocumentSummaryRow: some View {
         HStack(spacing: 12) {
             Image(systemName: pendingDocumentFileType == .image ? "photo" : "doc")
-                .foregroundStyle(pendingDocumentFileURL == nil ? Color.secondary : Color.cyan)
+                .foregroundStyle(pendingDocumentFileURL == nil ? Color.secondary : appTheme.accentColor)
                 .frame(width: 24)
 
             Text(pendingDocumentOriginalFileName ?? "未選択")

@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct DocumentFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
 
     @Query(sort: [
         SortDescriptor(\Employer.sortOrder),
@@ -236,7 +237,7 @@ struct DocumentFormView: View {
     private var fileSummaryRow: some View {
         HStack(spacing: 12) {
             Image(systemName: attachmentFileType == .image ? "photo" : "doc")
-                .foregroundStyle(canPreview ? Color.cyan : Color.secondary)
+                .foregroundStyle(canPreview ? appTheme.accentColor : Color.secondary)
                 .frame(width: 24)
 
             Text(originalFileName ?? "未選択")

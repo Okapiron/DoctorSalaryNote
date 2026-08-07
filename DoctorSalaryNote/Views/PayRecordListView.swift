@@ -322,6 +322,8 @@ private enum PayRecordEmployerSummaryID: Hashable {
 }
 
 private struct PayRecordEmployerSummaryRow: View {
+    @Environment(\.appTheme) private var appTheme
+
     let summary: PayRecordEmployerSummary
     let isSelected: Bool
 
@@ -329,7 +331,7 @@ private struct PayRecordEmployerSummaryRow: View {
         HStack(spacing: 12) {
             Image(systemName: "building.2")
                 .font(.title3)
-                .foregroundStyle(.cyan)
+                .foregroundStyle(appTheme.accentColor)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -341,7 +343,7 @@ private struct PayRecordEmployerSummaryRow: View {
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(appTheme.accentColor)
                             .accessibilityLabel("絞り込み中")
                     }
                 }
@@ -366,6 +368,8 @@ private struct PayRecordEmployerSummaryRow: View {
 }
 
 private struct PayRecordRow: View {
+    @Environment(\.appTheme) private var appTheme
+
     let record: PayRecord
     let hasDocument: Bool
 
@@ -381,7 +385,7 @@ private struct PayRecordRow: View {
                     if hasDocument {
                         Image(systemName: "paperclip")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(appTheme.accentColor)
                             .accessibilityLabel("添付書類あり")
                     }
                 }
@@ -410,6 +414,8 @@ private struct PayRecordRow: View {
 }
 
 struct PayRecordDetailView: View {
+    @Environment(\.appTheme) private var appTheme
+
     let payRecord: PayRecord
 
     @Query(sort: [
@@ -526,7 +532,7 @@ struct PayRecordDetailView: View {
     private func documentRow(_ document: DocumentAttachment) -> some View {
         HStack(spacing: 12) {
             Image(systemName: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
-                .foregroundStyle(.cyan)
+                .foregroundStyle(appTheme.accentColor)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.documentType.label)
