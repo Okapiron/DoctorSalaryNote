@@ -10,7 +10,7 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 - Display Name: `医師給与ノート`
 - Deployment Target: iOS 17.0
 - Version: 1.2
-- Build Number: 38
+- Build Number: 39
 - Signing: Automatic。Team ID `2WG3Z522JL` を設定済み
 - Launch Screen: Xcodeの生成設定あり
 - App Icon: Asset Catalogに設定済み
