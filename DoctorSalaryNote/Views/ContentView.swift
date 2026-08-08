@@ -13,7 +13,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .aqua: "水色"
+        case .aqua: "ブルー"
         case .pink: "ピンク"
         case .green: "グリーン"
         case .gray: "グレー"
