@@ -30,7 +30,13 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 
     var chartGrossColor: Color {
-        accentColor
+        switch self {
+        case .aqua:
+            // Restore the original palette: teal controls with cyan gross-pay bars.
+            .cyan
+        case .pink, .green, .gray:
+            accentColor
+        }
     }
 
     var chartNetColor: Color {
