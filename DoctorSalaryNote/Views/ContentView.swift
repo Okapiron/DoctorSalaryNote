@@ -182,7 +182,7 @@ struct ContentView: View {
 
         Task {
             do {
-                try await BiometricAuthenticator.authenticate(reason: "医師給与ノートの内容を表示するため認証してください。")
+                try await BiometricAuthenticator.authenticate(reason: "Dr's Salaryの内容を表示するため認証してください。")
                 await MainActor.run {
                     isUnlocked = true
                     isPrivacyCovered = false
@@ -212,7 +212,7 @@ private struct LockedContentView: View {
                 .foregroundStyle(appTheme.accentColor)
 
             VStack(spacing: 8) {
-                Text("医師給与ノートはロックされています")
+                Text("Dr's Salaryはロックされています")
                     .font(.headline)
                 Text(message ?? "給与情報を表示するには認証してください。")
                     .font(.subheadline)

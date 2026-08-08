@@ -223,7 +223,8 @@ struct SettingsView: View {
                         "勤務先、給与明細、書類情報は端末内に保存されます。",
                         "給与明細、源泉徴収票、支払調書などの添付ファイルも端末内に保存されます。",
                         "本アプリは給与情報や添付ファイルを外部サーバーへ送信しません。",
-                        "MVPではクラウド同期を行いません。",
+                        "給与明細のOCR読み取りは端末内で処理され、画像や認識結果を外部のOCRサービスへ送信しません。",
+                        "クラウド同期は行いません。",
                         "CSV出力や共有は、ユーザー操作によってのみ行われます。共有先の扱いにはご注意ください。"
                     ]
                 )
@@ -381,13 +382,13 @@ private struct AppInfoView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("アプリ名", value: "医師給与ノート")
+                LabeledContent("アプリ名", value: "Dr's Salary")
                 LabeledContent("バージョン", value: versionText)
                 LabeledContent("ビルド", value: buildNumberText)
             }
 
             Section {
-                Text("医師の複数勤務先からの給与・収入と関連書類を、端末内で整理するための補助アプリです。")
+                Text("医師の複数勤務先からの給与・収入と関連書類をまとめ、給与明細の端末内OCRで入力を支援するアプリです。")
                     .font(.body)
                     .padding(.vertical, 4)
             }
