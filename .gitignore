@@ -19,6 +19,7 @@ xcuserdata/
 *.ipa
 *.dSYM
 *.dSYM.zip
+*.p8
 
 # Swift Package Manager
 .swiftpm/

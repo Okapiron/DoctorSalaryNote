@@ -604,3 +604,22 @@ OCR処理中は給与明細を保存できないようにする。入力済み�
 - 給与、勤務先、書類など既存データには影響しない
 - 未知または壊れた保存値は水色へフォールバックする
 - 全データ削除後は従来と同じ水色テーマになる
+
+## 2026-08-08: TestFlightアップロードはApp Store Connect APIキーを使う
+
+### Decision
+
+TestFlightへのArchiveとアップロードは、XcodeのApple Accountセッションではなく、医師給与ノート専用のApp Store Connect APIキーで認証する。
+
+秘密鍵はリポジトリ外の `~/.appstoreconnect/private_keys` に保存し、所有者だけが読める権限にする。Key IDとIssuer IDはアップロードスクリプトで参照するが、秘密鍵そのものはコード、ドキュメント、Gitへ保存しない。
+
+### Reason
+
+XcodeのApple Account認証はセッション切れや再ログイン要求が起きることがあり、TestFlight配布のたびに手作業が必要になっていた。専用APIキーなら、権限と用途を限定した再現可能なアップロード手順にできる。
+
+### Impact
+
+- `tools/upload_testflight.sh` でRelease ArchiveとTestFlight送信を実行できる
+- Xcodeの画面上のログイン状態に依存しにくくなる
+- 秘密鍵を紛失した場合は、App Store Connectでキーを失効して再発行する
+- キーが不要になった場合や漏えいが疑われる場合は、直ちに失効する

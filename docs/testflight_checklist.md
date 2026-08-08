@@ -9,8 +9,8 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 - Bundle Identifier: `com.hiroki.DoctorSalaryNote`
 - Display Name: `医師給与ノート`
 - Deployment Target: iOS 17.0
-- Version: 1.1
-- Build Number: 34
+- Version: 1.2
+- Build Number: 38
 - Signing: Automatic。Team ID `2WG3Z522JL` を設定済み
 - Launch Screen: Xcodeの生成設定あり
 - App Icon: Asset Catalogに設定済み
@@ -83,6 +83,28 @@ xcodebuild -project DoctorSalaryNote.xcodeproj -scheme DoctorSalaryNote -configu
 - Apple Distribution証明書またはXcodeの自動署名で配布用署名を準備する
 - 実機でFace ID / Touch ID、ファイル取込、共有を確認する
 - App Store ConnectのPrivacy回答を確定する
+
+## App Store Connect APIキーによるアップロード
+
+XcodeのApple Accountセッション切れに左右されないよう、TestFlightへのArchiveとアップロードにはApp Store Connect APIキーを使う。
+
+- Issuer ID: `7ef8fd2b-6536-4742-8f1d-7d3aece815c4`
+- Key ID: `VL7Q8S9YXC`
+- キー名: `DoctorSalaryNote Upload`
+- ロール: Developer
+- 秘密鍵の保存先: `~/.appstoreconnect/private_keys/AuthKey_VL7Q8S9YXC.p8`
+
+秘密鍵はリポジトリへ追加しない。権限は秘密鍵を所有者だけが読める状態にする。
+
+プロジェクトのVersionとBuild Numberを更新した後、以下を実行する。引数を省略した場合はXcodeプロジェクトのBuild Numberを使う。
+
+```sh
+tools/upload_testflight.sh 39
+```
+
+スクリプトはAPIキーを使って署名用プロファイルを取得し、Release Archiveを作成してTestFlightへ送信する。Apple Accountの再ログインを要求された場合は、秘密鍵の配置、キーの有効状態、Developerロールを先に確認する。
+
+秘密鍵は作成時に一度しかダウンロードできない。Macの移行や紛失時は同じキーを復元せず、App Store Connectで古いキーを失効して新しい専用キーを発行する。
 
 ## 2026-05-29 確認結果
 
