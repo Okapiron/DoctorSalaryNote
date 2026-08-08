@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 
 struct HomeSummaryView: View {
+    @Environment(\.appTheme) private var appTheme
+
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
         SortDescriptor(\PayRecord.paymentMonth, order: .reverse),
@@ -122,7 +124,7 @@ struct HomeSummaryView: View {
             .frame(minHeight: 52)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.teal)
+                    .fill(appTheme.accentColor)
             )
         }
         .buttonStyle(.plain)
@@ -152,7 +154,7 @@ struct HomeSummaryView: View {
                                 x: .value("月", summary.shortLabel),
                                 y: .value("額面", summary.grossTotal)
                             )
-                            .foregroundStyle(.cyan.gradient)
+                            .foregroundStyle(appTheme.chartGrossColor.gradient)
                             .cornerRadius(4)
                         }
 
@@ -162,14 +164,14 @@ struct HomeSummaryView: View {
                                 y: .value("手取り", summary.netTotal),
                                 series: .value("連続区間", summary.segment)
                             )
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(appTheme.chartNetColor)
                             .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
                             PointMark(
                                 x: .value("月", summary.shortLabel),
                                 y: .value("手取り", summary.netTotal)
                             )
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(appTheme.chartNetColor)
                         }
                     }
                     .chartYAxis {
@@ -320,7 +322,7 @@ struct HomeSummaryView: View {
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.background)
-                    .shadow(color: Color.cyan.opacity(0.08), radius: 10, y: 4)
+                    .shadow(color: appTheme.accentColor.opacity(0.10), radius: 10, y: 4)
             )
     }
 
@@ -341,9 +343,9 @@ struct HomeSummaryView: View {
     private func headerIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.cyan)
+            .foregroundStyle(appTheme.accentColor)
             .frame(width: 28, height: 28)
-            .background(Color.cyan.opacity(0.10))
+            .background(appTheme.accentColor.opacity(0.12))
             .clipShape(Circle())
     }
 }
@@ -394,6 +396,8 @@ private struct HomeYearSummary {
 }
 
 private struct RecentPayRecordRow: View {
+    @Environment(\.appTheme) private var appTheme
+
     let record: PayRecord
 
     var body: some View {
@@ -415,7 +419,7 @@ private struct RecentPayRecordRow: View {
                 Text("額面 \(yenText(record.grossAmount))")
                 Spacer()
                 Text("手取り \(record.netAmount.map(yenText) ?? "未入力")")
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(appTheme.accentColor)
             }
             .font(.caption)
         }

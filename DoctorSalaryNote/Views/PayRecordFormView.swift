@@ -30,6 +30,7 @@ private struct DeductionDraft: Identifiable {
 struct PayRecordFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
 
     @Query(sort: [
         SortDescriptor(\Employer.sortOrder),
@@ -133,6 +134,28 @@ struct PayRecordFormView: View {
         }
         _memo = State(initialValue: payRecord?.memo ?? "")
     }
+
+#if DEBUG
+    init(screenshotEmployer: Employer) {
+        self.init(initialEmployer: screenshotEmployer)
+        _paymentYear = State(initialValue: 2026)
+        _paymentMonth = State(initialValue: 7)
+        _incomeCategory = State(initialValue: .fullTimeSalary)
+        _grossAmountText = State(initialValue: "824500")
+        _netAmountText = State(initialValue: "641230")
+        _deductionAmountText = State(initialValue: "183270")
+        _incomeTaxAmountText = State(initialValue: "39200")
+        _residentTaxAmountText = State(initialValue: "28600")
+        _deductionDrafts = State(initialValue: [
+            DeductionDraft(name: "健康保険", amountText: "27900", inputSource: .ocr),
+            DeductionDraft(name: "厚生年金", amountText: "73200", inputSource: .ocr),
+            DeductionDraft(name: "雇用保険", amountText: "4370", inputSource: .ocr)
+        ])
+        _ocrStatusMessage = State(
+            initialValue: "書類から自動入力しました。原本と照合してから保存してください。"
+        )
+    }
+#endif
 
     private var selectableEmployers: [Employer] {
         employers.filter { employer in
@@ -556,7 +579,7 @@ struct PayRecordFormView: View {
     private var pendingDocumentSummaryRow: some View {
         HStack(spacing: 12) {
             Image(systemName: pendingDocumentFileType == .image ? "photo" : "doc")
-                .foregroundStyle(pendingDocumentFileURL == nil ? Color.secondary : Color.cyan)
+                .foregroundStyle(pendingDocumentFileURL == nil ? Color.secondary : appTheme.accentColor)
                 .frame(width: 24)
 
             Text(pendingDocumentOriginalFileName ?? "未選択")

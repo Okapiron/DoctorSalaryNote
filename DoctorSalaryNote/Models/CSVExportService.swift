@@ -57,7 +57,7 @@ enum CSVExportService {
             .map { row in row.map(escapedCSVField).joined(separator: ",") }
             .joined(separator: "\n")
 
-        let fileName = year.map { "医師給与ノート_給与明細_\($0)年.csv" } ?? "医師給与ノート_給与明細_全期間.csv"
+        let fileName = year.map { "Dr's Salary_給与明細_\($0)年.csv" } ?? "Dr's Salary_給与明細_全期間.csv"
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         var data = Data([0xEF, 0xBB, 0xBF])
         data.append(Data(csvText.utf8))

@@ -1,4 +1,4 @@
-# 医師給与ノート TestFlightチェックリスト
+# Dr's Salary TestFlightチェックリスト
 
 ## 目的
 
@@ -7,10 +7,10 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 ## Xcodeプロジェクト設定
 
 - Bundle Identifier: `com.hiroki.DoctorSalaryNote`
-- Display Name: `医師給与ノート`
+- Display Name: `Dr's Salary`
 - Deployment Target: iOS 17.0
-- Version: 1.1
-- Build Number: 34
+- Version: 1.3
+- Build Number: 40
 - Signing: Automatic。Team ID `2WG3Z522JL` を設定済み
 - Launch Screen: Xcodeの生成設定あり
 - App Icon: Asset Catalogに設定済み
@@ -21,6 +21,7 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 - Face ID / Touch ID: LocalAuthenticationを使用。Face ID説明文は設定済み
 - PhotosPicker: ユーザーが選択した画像のみを取り込む実装。直接フォトライブラリ全体を読む実装ではない
 - fileImporter: ユーザーが選択したPDFのみを取り込む実装
+- OCR: Apple Vision / PDFKitを使用し、画像、PDF、認識テキストは端末内で処理
 - 外部通信: URLSession、CloudKit、サーバー送信、クラウド同期の実装なし
 - CSV共有: ユーザー操作によるShareLinkのみ
 
@@ -49,6 +50,10 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 - ホームの直近6か月が現在月基準で、未登録月の手取り線が結ばれないこと
 - OCR中は保存できず、既入力フォームの再取込前に上書き確認が出ること
 - OCR候補へ別の勤務先の固有控除項目が混ざらないこと
+- 写真、写真ライブラリ、文字情報を含むPDF、スキャンPDFからOCRできること
+- OCR結果が自動保存されず、フォームで確認・修正してから保存できること
+- 暗い画像、傾いた画像、認識できない画像で自然な案内が出ること
+- 同じ書類を再取込したときに既存入力の上書き確認が出ること
 - 同義の控除項目が重複せず、重複名では保存できないこと
 - 書類、給与明細、全データ削除で実ファイルが整理され、失敗時に部分失敗が表示されること
 - 支払調書が「なし（任意）」として警告扱いされないこと
@@ -83,6 +88,28 @@ xcodebuild -project DoctorSalaryNote.xcodeproj -scheme DoctorSalaryNote -configu
 - Apple Distribution証明書またはXcodeの自動署名で配布用署名を準備する
 - 実機でFace ID / Touch ID、ファイル取込、共有を確認する
 - App Store ConnectのPrivacy回答を確定する
+
+## App Store Connect APIキーによるアップロード
+
+XcodeのApple Accountセッション切れに左右されないよう、TestFlightへのArchiveとアップロードにはApp Store Connect APIキーを使う。
+
+- Issuer ID: `7ef8fd2b-6536-4742-8f1d-7d3aece815c4`
+- Key ID: `VL7Q8S9YXC`
+- キー名: `DoctorSalaryNote Upload`
+- ロール: Developer
+- 秘密鍵の保存先: `~/.appstoreconnect/private_keys/AuthKey_VL7Q8S9YXC.p8`
+
+秘密鍵はリポジトリへ追加しない。権限は秘密鍵を所有者だけが読める状態にする。
+
+プロジェクトのVersionとBuild Numberを更新した後、以下を実行する。引数を省略した場合はXcodeプロジェクトのBuild Numberを使う。
+
+```sh
+tools/upload_testflight.sh 40
+```
+
+スクリプトはAPIキーを使って署名用プロファイルを取得し、Release Archiveを作成してTestFlightへ送信する。Apple Accountの再ログインを要求された場合は、秘密鍵の配置、キーの有効状態、Developerロールを先に確認する。
+
+秘密鍵は作成時に一度しかダウンロードできない。Macの移行や紛失時は同じキーを復元せず、App Store Connectで古いキーを失効して新しい専用キーを発行する。
 
 ## 2026-05-29 確認結果
 

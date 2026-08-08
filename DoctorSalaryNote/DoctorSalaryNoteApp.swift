@@ -5,8 +5,19 @@ import SwiftUI
 struct DoctorSalaryNoteApp: App {
     private let modelContainer: ModelContainer?
     private let modelContainerError: String?
+#if DEBUG
+    private let appStoreScreenshotMode: String?
+    private let appStoreScreenshotEmployer: Employer?
+#endif
 
     init() {
+#if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        let screenshotMode = arguments.first { $0.hasPrefix("-appStoreScreenshot") }
+        appStoreScreenshotMode = screenshotMode
+#else
+        let screenshotMode: String? = nil
+#endif
         let schema = Schema([
             Employer.self,
             PayRecord.self,
@@ -15,22 +26,69 @@ struct DoctorSalaryNoteApp: App {
             DocumentAttachment.self,
             AppSettings.self
         ])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: screenshotMode != nil
+        )
 
+        let containerResult: Result<ModelContainer, Error>
         do {
-            modelContainer = try ModelContainer(for: schema, configurations: [configuration])
-            modelContainerError = nil
+            containerResult = .success(try ModelContainer(for: schema, configurations: [configuration]))
         } catch {
+            containerResult = .failure(error)
+        }
+
+        switch containerResult {
+        case .success(let container):
+            modelContainer = container
+            modelContainerError = nil
+#if DEBUG
+            if screenshotMode != nil {
+                let employer = Employer(
+                    name: "青空メディカルセンター",
+                    employerType: .fullTime,
+                    defaultIncomeCategory: .fullTimeSalary
+                )
+                container.mainContext.insert(employer)
+                appStoreScreenshotEmployer = employer
+            } else {
+                appStoreScreenshotEmployer = nil
+            }
+#endif
+        case .failure(let error):
             modelContainer = nil
             modelContainerError = error.localizedDescription
+#if DEBUG
+            appStoreScreenshotEmployer = nil
+#endif
         }
     }
 
     var body: some Scene {
         WindowGroup {
             if let modelContainer {
+#if DEBUG
+                if let appStoreScreenshotMode,
+                   let appStoreScreenshotEmployer {
+                    NavigationStack {
+                        if appStoreScreenshotMode == "-appStoreScreenshotImport" {
+                            PayRecordFormView(
+                                initialEmployer: appStoreScreenshotEmployer,
+                                showsImportOptionsOnAppear: true
+                            )
+                        } else {
+                            PayRecordFormView(screenshotEmployer: appStoreScreenshotEmployer)
+                        }
+                    }
+                    .modelContainer(modelContainer)
+                } else {
+                    ContentView()
+                        .modelContainer(modelContainer)
+                }
+#else
                 ContentView()
                     .modelContainer(modelContainer)
+#endif
             } else {
                 DataStoreErrorView(errorDescription: modelContainerError)
             }

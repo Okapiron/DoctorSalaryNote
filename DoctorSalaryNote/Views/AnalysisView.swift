@@ -3,6 +3,8 @@ import SwiftData
 import SwiftUI
 
 struct AnalysisView: View {
+    @Environment(\.appTheme) private var appTheme
+
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
         SortDescriptor(\PayRecord.paymentMonth, order: .reverse),
@@ -329,8 +331,8 @@ struct AnalysisView: View {
                 }
 
                 HStack(spacing: 12) {
-                    LegendDot(color: .cyan, text: "額面")
-                    LegendDot(color: .blue, text: "手取り")
+                    LegendDot(color: appTheme.chartGrossColor, text: "額面")
+                    LegendDot(color: appTheme.chartNetColor, text: "手取り")
                 }
                 .font(.caption)
 
@@ -353,7 +355,7 @@ struct AnalysisView: View {
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.background)
-                    .shadow(color: Color.cyan.opacity(0.08), radius: 10, y: 4)
+                    .shadow(color: appTheme.accentColor.opacity(0.10), radius: 10, y: 4)
             )
     }
 
@@ -398,7 +400,7 @@ struct AnalysisView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("翌年へ")
             }
-            .foregroundStyle(.cyan)
+            .foregroundStyle(appTheme.accentColor)
         }
     }
 
@@ -441,8 +443,8 @@ struct AnalysisView: View {
         }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                LegendDot(color: .cyan, text: "額面")
-                LegendDot(color: .blue, text: "手取り")
+                LegendDot(color: appTheme.chartGrossColor, text: "額面")
+                LegendDot(color: appTheme.chartNetColor, text: "手取り")
             }
             .font(.caption)
 
@@ -453,7 +455,7 @@ struct AnalysisView: View {
                         y: .value("総支給額", point.grossTotal),
                         width: .ratio(points.count > 8 ? 0.50 : 0.64)
                     )
-                    .foregroundStyle(Color.cyan.opacity(0.72))
+                    .foregroundStyle(appTheme.chartGrossColor.opacity(0.72))
                     .cornerRadius(3)
                 }
 
@@ -463,7 +465,7 @@ struct AnalysisView: View {
                         y: .value("手取り", point.netTotal),
                         series: .value("連続区間", point.segment)
                     )
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(appTheme.chartNetColor)
                     .interpolationMethod(.linear)
                     .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
 
@@ -471,7 +473,7 @@ struct AnalysisView: View {
                         x: .value("期間", point.label),
                         y: .value("手取り", point.netTotal)
                     )
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(appTheme.chartNetColor)
                     .symbolSize(24)
                 }
             }
@@ -731,6 +733,8 @@ private struct BreakdownRow: View {
 }
 
 private struct InfographicBreakdownRow: View {
+    @Environment(\.appTheme) private var appTheme
+
     let rank: Int
     let summary: BreakdownSummary
     let yearlyGrossTotal: Int
@@ -750,7 +754,7 @@ private struct InfographicBreakdownRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(String(format: "%02d", rank))
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(appTheme.accentColor)
                     .monospacedDigit()
 
                 Text(summary.label)
@@ -777,7 +781,10 @@ private struct InfographicBreakdownRow: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Color.cyan.opacity(0.46), Color.cyan.opacity(0.88)],
+                                colors: [
+                                    appTheme.chartGrossColor.opacity(0.46),
+                                    appTheme.chartGrossColor.opacity(0.88)
+                                ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -786,7 +793,7 @@ private struct InfographicBreakdownRow: View {
 
                     if summary.hasNetAmount {
                         Circle()
-                            .fill(Color.blue)
+                            .fill(appTheme.chartNetColor)
                             .frame(width: 10, height: 10)
                             .overlay {
                                 Circle()

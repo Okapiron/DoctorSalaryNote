@@ -3,6 +3,7 @@ import SwiftUI
 
 struct DocumentListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
 
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
@@ -112,7 +113,7 @@ struct DocumentListView: View {
                                 if selectedSummaryID == summary.id {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.cyan)
+                                        .foregroundStyle(appTheme.accentColor)
                                         .accessibilityLabel("絞り込み中")
                                 }
                                 Text("\(summary.totalDocumentCount)件")
@@ -298,13 +299,15 @@ private enum DocumentStatus: Equatable {
 }
 
 private struct DocumentRow: View {
+    @Environment(\.appTheme) private var appTheme
+
     let document: DocumentAttachment
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
                 .font(.title3)
-                .foregroundStyle(.cyan)
+                .foregroundStyle(appTheme.accentColor)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 4) {

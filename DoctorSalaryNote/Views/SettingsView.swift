@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(AppTheme.storageKey) private var storedAppTheme = AppTheme.aqua.rawValue
 
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
@@ -35,11 +36,13 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            appearanceSection
             securitySection
             csvSection
             dataManagementSection
             informationSection
         }
+        .tint(selectedAppTheme.accentColor)
         .navigationTitle("設定")
         .onAppear(perform: ensureSettings)
         .confirmationDialog(
@@ -59,6 +62,51 @@ struct SettingsView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("この操作は元に戻せません。保存済みの添付ファイルも削除されます。")
+        }
+    }
+
+    private var selectedAppTheme: AppTheme {
+        AppTheme(rawValue: storedAppTheme) ?? .aqua
+    }
+
+    private var appearanceSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                ForEach(AppTheme.allCases) { theme in
+                    Button {
+                        storedAppTheme = theme.rawValue
+                    } label: {
+                        VStack(spacing: 7) {
+                            ZStack {
+                                Circle()
+                                    .fill(theme.accentColor)
+                                    .frame(width: 34, height: 34)
+
+                                if selectedAppTheme == theme {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+
+                            Text(theme.label)
+                                .font(.caption2)
+                                .foregroundStyle(selectedAppTheme == theme ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(theme.label)テーマ")
+                    .accessibilityValue(selectedAppTheme == theme ? "選択中" : "")
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("テーマカラー")
+        } footer: {
+            Text("ボタンやタブ、主要アイコンの色を変更します。")
         }
     }
 
@@ -175,7 +223,8 @@ struct SettingsView: View {
                         "勤務先、給与明細、書類情報は端末内に保存されます。",
                         "給与明細、源泉徴収票、支払調書などの添付ファイルも端末内に保存されます。",
                         "本アプリは給与情報や添付ファイルを外部サーバーへ送信しません。",
-                        "MVPではクラウド同期を行いません。",
+                        "給与明細のOCR読み取りは端末内で処理され、画像や認識結果を外部のOCRサービスへ送信しません。",
+                        "クラウド同期は行いません。",
                         "CSV出力や共有は、ユーザー操作によってのみ行われます。共有先の扱いにはご注意ください。"
                     ]
                 )
@@ -284,6 +333,7 @@ struct SettingsView: View {
         do {
             try modelContext.save()
             UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
+            storedAppTheme = AppTheme.aqua.rawValue
             selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil
@@ -332,13 +382,13 @@ private struct AppInfoView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("アプリ名", value: "医師給与ノート")
+                LabeledContent("アプリ名", value: "Dr's Salary")
                 LabeledContent("バージョン", value: versionText)
                 LabeledContent("ビルド", value: buildNumberText)
             }
 
             Section {
-                Text("医師の複数勤務先からの給与・収入と関連書類を、端末内で整理するための補助アプリです。")
+                Text("医師の複数勤務先からの給与・収入と関連書類をまとめ、給与明細の端末内OCRで入力を支援するアプリです。")
                     .font(.body)
                     .padding(.vertical, 4)
             }

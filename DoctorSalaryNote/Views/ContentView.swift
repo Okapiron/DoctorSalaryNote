@@ -1,10 +1,74 @@
 import SwiftData
 import SwiftUI
 
+enum AppTheme: String, CaseIterable, Identifiable {
+    case aqua
+    case pink
+    case green
+    case gray
+
+    static let storageKey = "appTheme"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .aqua: "ブルー"
+        case .pink: "ピンク"
+        case .green: "グリーン"
+        case .gray: "グレー"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .aqua: .teal
+        case .pink: .pink
+        case .green: .green
+        case .gray: .gray
+        }
+    }
+
+    var chartGrossColor: Color {
+        switch self {
+        case .aqua:
+            // Restore the original palette: teal controls with cyan gross-pay bars.
+            .cyan
+        case .pink, .green, .gray:
+            accentColor
+        }
+    }
+
+    var chartNetColor: Color {
+        switch self {
+        case .aqua:
+            .blue
+        case .pink:
+            Color(red: 0.62, green: 0.14, blue: 0.42)
+        case .green:
+            Color(red: 0.05, green: 0.38, blue: 0.24)
+        case .gray:
+            .primary
+        }
+    }
+}
+
+private struct AppThemeEnvironmentKey: EnvironmentKey {
+    static let defaultValue = AppTheme.aqua
+}
+
+extension EnvironmentValues {
+    var appTheme: AppTheme {
+        get { self[AppThemeEnvironmentKey.self] }
+        set { self[AppThemeEnvironmentKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var appSettings: [AppSettings]
     @AppStorage("biometricLockEnabled") private var storedBiometricLockEnabled = false
+    @AppStorage(AppTheme.storageKey) private var storedAppTheme = AppTheme.aqua.rawValue
 
     @State private var isUnlocked = false
     @State private var isPrivacyCovered = false
@@ -21,6 +85,10 @@ struct ContentView: View {
         isBiometricLockEnabled && (!isUnlocked || isPrivacyCovered)
     }
 
+    private var appTheme: AppTheme {
+        AppTheme(rawValue: storedAppTheme) ?? .aqua
+    }
+
     var body: some View {
         ZStack {
             mainTabs
@@ -32,6 +100,8 @@ struct ContentView: View {
                 )
             }
         }
+        .environment(\.appTheme, appTheme)
+        .tint(appTheme.accentColor)
         .onAppear {
             storedBiometricLockEnabled = isBiometricLockEnabled
             if isBiometricLockEnabled {
@@ -104,7 +174,7 @@ struct ContentView: View {
                 Label("分析", systemImage: "chart.bar")
             }
         }
-        .tint(.teal)
+        .tint(appTheme.accentColor)
     }
 
     private func authenticate() {
@@ -118,7 +188,7 @@ struct ContentView: View {
 
         Task {
             do {
-                try await BiometricAuthenticator.authenticate(reason: "医師給与ノートの内容を表示するため認証してください。")
+                try await BiometricAuthenticator.authenticate(reason: "Dr's Salaryの内容を表示するため認証してください。")
                 await MainActor.run {
                     isUnlocked = true
                     isPrivacyCovered = false
@@ -136,6 +206,8 @@ struct ContentView: View {
 }
 
 private struct LockedContentView: View {
+    @Environment(\.appTheme) private var appTheme
+
     let message: String?
     let authenticateAction: () -> Void
 
@@ -143,10 +215,10 @@ private struct LockedContentView: View {
         VStack(spacing: 20) {
             Image(systemName: "lock.shield")
                 .font(.system(size: 48))
-                .foregroundStyle(.blue)
+                .foregroundStyle(appTheme.accentColor)
 
             VStack(spacing: 8) {
-                Text("医師給与ノートはロックされています")
+                Text("Dr's Salaryはロックされています")
                     .font(.headline)
                 Text(message ?? "給与情報を表示するには認証してください。")
                     .font(.subheadline)
