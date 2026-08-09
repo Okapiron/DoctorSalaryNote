@@ -25,7 +25,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .aqua: .teal
         case .pink: .pink
         case .green: .green
-        case .gray: .gray
+        case .gray:
+            Color(red: 0.30, green: 0.32, blue: 0.36)
         }
     }
 
@@ -39,7 +40,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .green:
             Color(red: 0.16, green: 0.66, blue: 0.45)
         case .gray:
-            Color(red: 0.43, green: 0.47, blue: 0.52)
+            Color(red: 0.50, green: 0.53, blue: 0.58)
         }
     }
 
@@ -52,7 +53,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .green:
             Color(red: 0.05, green: 0.38, blue: 0.24)
         case .gray:
-            Color(red: 0.16, green: 0.19, blue: 0.23)
+            Color(red: 0.10, green: 0.12, blue: 0.15)
         }
     }
 }

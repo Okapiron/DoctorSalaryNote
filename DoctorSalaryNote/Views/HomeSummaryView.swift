@@ -211,13 +211,13 @@ struct HomeSummaryView: View {
                     latestMonthAmount(
                         "額面",
                         latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal),
-                        tint: appTheme.chartGrossColor
+                        tint: appTheme.accentColor
                     )
 
                     latestMonthAmount(
                         "手取り",
                         latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText,
-                        tint: appTheme.chartNetColor
+                        tint: appTheme.accentColor
                     )
                 }
             }
