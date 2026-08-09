@@ -10,7 +10,7 @@ TestFlight配布前に、Xcode設定、Privacy、App Store Connectで必要に�
 - Display Name: `Dr's Salary`
 - Deployment Target: iOS 17.0
 - Version: 1.3
-- Build Number: 40
+- Build Number: 41
 - Signing: Automatic。Team ID `2WG3Z522JL` を設定済み
 - Launch Screen: Xcodeの生成設定あり
 - App Icon: Asset Catalogに設定済み
