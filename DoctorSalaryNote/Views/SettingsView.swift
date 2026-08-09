@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AppTheme.storageKey) private var storedAppTheme = AppTheme.aqua.rawValue
+    @AppStorage(AppIconChoice.storageKey) private var storedAppIconChoice = AppIconChoice.followTheme.rawValue
 
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
@@ -22,6 +23,7 @@ struct SettingsView: View {
     @State private var csvFileURL: URL?
     @State private var csvMessage: String?
     @State private var securityMessage: String?
+    @State private var appIconMessage: String?
     @State private var deleteMessage: String?
     @State private var showsDeleteConfirmation = false
     @State private var showsFinalDeleteAlert = false
@@ -45,6 +47,15 @@ struct SettingsView: View {
         .tint(selectedAppTheme.accentColor)
         .navigationTitle("設定")
         .onAppear(perform: ensureSettings)
+        .onChange(of: storedAppTheme) { _, _ in
+            guard selectedAppIconChoice == .followTheme else {
+                return
+            }
+            updateAppIcon()
+        }
+        .onChange(of: storedAppIconChoice) { _, _ in
+            updateAppIcon()
+        }
         .confirmationDialog(
             "全データ削除",
             isPresented: $showsDeleteConfirmation,
@@ -67,6 +78,10 @@ struct SettingsView: View {
 
     private var selectedAppTheme: AppTheme {
         AppTheme(rawValue: storedAppTheme) ?? .aqua
+    }
+
+    private var selectedAppIconChoice: AppIconChoice {
+        AppIconChoice(rawValue: storedAppIconChoice) ?? .followTheme
     }
 
     private var appearanceSection: some View {
@@ -103,10 +118,22 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 4)
+
+            Picker("ホーム画面アイコン", selection: $storedAppIconChoice) {
+                ForEach(AppIconChoice.allCases) { choice in
+                    Text(choice.label).tag(choice.rawValue)
+                }
+            }
+
+            if let appIconMessage {
+                Text(appIconMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         } header: {
             Text("テーマカラー")
         } footer: {
-            Text("ボタン、タブ、主要アイコン、グラフの色を変更します。")
+            Text("ボタン、タブ、主要アイコン、グラフの色を変更します。ホーム画面アイコンの変更時は、iOSの確認が表示されます。")
         }
     }
 
@@ -275,6 +302,21 @@ struct SettingsView: View {
         }
     }
 
+    private func updateAppIcon() {
+        appIconMessage = nil
+        let choice = selectedAppIconChoice
+        let theme = selectedAppTheme
+
+        Task {
+            do {
+                try await AppIconManager.update(choice: choice, theme: theme)
+                appIconMessage = "ホーム画面アイコンを変更しました。"
+            } catch {
+                appIconMessage = "ホーム画面アイコンを変更できませんでした。もう一度お試しください。"
+            }
+        }
+    }
+
     private func updateBiometricLock(isEnabled: Bool) -> Bool {
         let targetSettings: AppSettings
         if let settings {
@@ -334,6 +376,8 @@ struct SettingsView: View {
             try modelContext.save()
             UserDefaults.standard.set(false, forKey: "biometricLockEnabled")
             storedAppTheme = AppTheme.aqua.rawValue
+            storedAppIconChoice = AppIconChoice.followTheme.rawValue
+            updateAppIcon()
             selectedCSVYear = 0
             csvFileURL = nil
             csvMessage = nil

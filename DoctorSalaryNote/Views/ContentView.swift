@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case aqua
@@ -54,6 +55,81 @@ enum AppTheme: String, CaseIterable, Identifiable {
             Color(red: 0.05, green: 0.38, blue: 0.24)
         case .gray:
             Color(red: 0.10, green: 0.12, blue: 0.15)
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .aqua:
+            nil
+        case .pink:
+            "AppIcon-Pink"
+        case .green:
+            "AppIcon-Green"
+        case .gray:
+            "AppIcon-Gray"
+        }
+    }
+}
+
+enum AppIconChoice: String, CaseIterable, Identifiable {
+    case followTheme
+    case blue
+    case pink
+    case green
+    case gray
+
+    static let storageKey = "appIconChoice"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .followTheme: "テーマに合わせる"
+        case .blue: "ブルー"
+        case .pink: "ピンク"
+        case .green: "グリーン"
+        case .gray: "グレー"
+        }
+    }
+
+    func resolvedIconName(for theme: AppTheme) -> String? {
+        switch self {
+        case .followTheme:
+            theme.alternateIconName
+        case .blue:
+            nil
+        case .pink:
+            AppTheme.pink.alternateIconName
+        case .green:
+            AppTheme.green.alternateIconName
+        case .gray:
+            AppTheme.gray.alternateIconName
+        }
+    }
+}
+
+@MainActor
+enum AppIconManager {
+    static func update(choice: AppIconChoice, theme: AppTheme) async throws {
+        let application = UIApplication.shared
+        guard application.supportsAlternateIcons else {
+            return
+        }
+
+        let iconName = choice.resolvedIconName(for: theme)
+        guard application.alternateIconName != iconName else {
+            return
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            application.setAlternateIconName(iconName) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
         }
     }
 }
