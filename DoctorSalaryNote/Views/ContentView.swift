@@ -34,8 +34,12 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .aqua:
             // Restore the original palette: teal controls with cyan gross-pay bars.
             .cyan
-        case .pink, .green, .gray:
-            accentColor
+        case .pink:
+            Color(red: 0.94, green: 0.33, blue: 0.55)
+        case .green:
+            Color(red: 0.16, green: 0.66, blue: 0.45)
+        case .gray:
+            Color(red: 0.43, green: 0.47, blue: 0.52)
         }
     }
 
@@ -48,7 +52,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .green:
             Color(red: 0.05, green: 0.38, blue: 0.24)
         case .gray:
-            .primary
+            Color(red: 0.16, green: 0.19, blue: 0.23)
         }
     }
 }

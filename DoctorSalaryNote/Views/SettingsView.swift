@@ -106,7 +106,7 @@ struct SettingsView: View {
         } header: {
             Text("テーマカラー")
         } footer: {
-            Text("ボタンやタブ、主要アイコンの色を変更します。")
+            Text("ボタン、タブ、主要アイコン、グラフの色を変更します。")
         }
     }
 

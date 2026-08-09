@@ -207,25 +207,24 @@ struct HomeSummaryView: View {
                     }
                 }
 
-                HStack(spacing: 16) {
+                HStack(spacing: 10) {
                     latestMonthAmount(
                         "額面",
-                        latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal)
+                        latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal),
+                        tint: appTheme.chartGrossColor
                     )
-
-                    Divider()
-                        .frame(height: 36)
 
                     latestMonthAmount(
                         "手取り",
-                        latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText
+                        latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText,
+                        tint: appTheme.chartNetColor
                     )
                 }
             }
         }
     }
 
-    private func latestMonthAmount(_ title: String, _ value: String) -> some View {
+    private func latestMonthAmount(_ title: String, _ value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.caption)
@@ -236,7 +235,13 @@ struct HomeSummaryView: View {
                 .minimumScaleFactor(0.75)
                 .monospacedDigit()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(tint.opacity(0.12))
+        }
     }
 
     private var yearSummarySection: some View {
