@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PayRecordListView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var appTheme
     @Query(sort: [
         SortDescriptor(\PayRecord.paymentYear, order: .reverse),
         SortDescriptor(\PayRecord.paymentMonth, order: .reverse),
@@ -102,18 +103,34 @@ struct PayRecordListView: View {
                         description: Text("左上の「勤務先」で勤務先を登録し、右上の追加ボタンから給与明細を追加できます。")
                     )
                 } else {
-                    Section("勤務先別の給与") {
-                        ForEach(employerSummaries) { summary in
+                    Section {
+                        ForEach(Array(employerSummaries.enumerated()), id: \.element.id) { index, summary in
                             Button {
                                 selectedEmployerID = selectedEmployerID == summary.id ? nil : summary.id
                             } label: {
                                 PayRecordEmployerSummaryRow(
+                                    rank: index + 1,
                                     summary: summary,
                                     isSelected: selectedEmployerID == summary.id
                                 )
                             }
                             .buttonStyle(.plain)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                            .listRowBackground(Color(.systemBackground))
+                            .listRowSeparatorTint(EditorialStyle.divider)
                         }
+                    } header: {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("勤務先別の給与")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("総支給額が多い順")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .textCase(nil)
+                        .padding(.bottom, 4)
                     }
 
                     Section {
@@ -128,12 +145,17 @@ struct PayRecordListView: View {
                                     hasDocument: hasLinkedDocument(for: record)
                                 )
                             }
+                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                            .listRowBackground(Color(.systemBackground))
+                            .listRowSeparatorTint(EditorialStyle.divider)
                         }
                         .onDelete(perform: deletePayRecords)
                     } header: {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 5) {
                             HStack {
                                 Text(selectedSummary.map { "\($0.employerName)の給与明細" } ?? "給与明細")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(.primary)
                                 Spacer()
                                 if selectedEmployerID != nil {
                                     Button("すべて表示") {
@@ -143,13 +165,15 @@ struct PayRecordListView: View {
                                 }
                             }
 
-                            if payRecordPageCount > 1 {
-                                HStack {
-                                    Text("\(clampedPayRecordPage + 1)/\(payRecordPageCount)ページ・\(payRecordPageRangeText)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .monospacedDigit()
-                                    Spacer()
+                            HStack {
+                                Text(payRecordPageCount > 1
+                                     ? "\(clampedPayRecordPage + 1)/\(payRecordPageCount)ページ ・ \(payRecordPageRangeText)"
+                                     : payRecordPageRangeText)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                Spacer()
+                                if payRecordPageCount > 1 {
                                     pageControl
                                 }
                             }
@@ -157,7 +181,12 @@ struct PayRecordListView: View {
                     }
                 }
             }
+            .listStyle(.plain)
+            .listSectionSpacing(16)
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemBackground))
             .navigationTitle("給与")
+            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: selectedEmployerID) { _, _ in
                 payRecordPage = 0
             }
@@ -324,20 +353,22 @@ private enum PayRecordEmployerSummaryID: Hashable {
 private struct PayRecordEmployerSummaryRow: View {
     @Environment(\.appTheme) private var appTheme
 
+    let rank: Int
     let summary: PayRecordEmployerSummary
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "building.2")
-                .font(.title3)
+        HStack(spacing: 10) {
+            Text(String(format: "%02d", rank))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(appTheme.accentColor)
-                .frame(width: 28)
+                .monospacedDigit()
+                .frame(width: 26, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(summary.employerName)
-                        .font(.headline)
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     if isSelected {
@@ -352,18 +383,25 @@ private struct PayRecordEmployerSummaryRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(summary.recordCount)件")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
                 Text(summary.grossTotal.yenText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    .monospacedDigit()
+                Text("\(summary.recordCount)件")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: 60)
         .contentShape(Rectangle())
+        .background {
+            if isSelected {
+                appTheme.accentColor.opacity(0.06)
+                    .padding(.horizontal, -8)
+            }
+        }
     }
 }
 
@@ -374,42 +412,41 @@ private struct PayRecordRow: View {
     let hasDocument: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(record.employer?.name ?? "勤務先未設定")
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    if hasDocument {
-                        Image(systemName: "paperclip")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(appTheme.accentColor)
-                            .accessibilityLabel("添付書類あり")
-                    }
-                }
-
-                Text(record.monthLabel)
-                    .font(.caption)
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(record.paymentMonth)月")
+                    .font(.system(size: 18, weight: .semibold))
+                    .monospacedDigit()
+                Text(verbatim: "\(record.paymentYear)年")
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+            }
+            .frame(width: 58, alignment: .leading)
+
+            HStack(spacing: 5) {
+                Text(record.employer?.name ?? "勤務先未設定")
+                    .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if hasDocument {
+                    Image(systemName: "paperclip")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(appTheme.accentColor)
+                        .accessibilityLabel("添付書類あり")
+                }
             }
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("総支給額")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(record.grossAmount.yenText)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(width: 118, alignment: .trailing)
+            Text(record.grossAmount.yenText)
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .monospacedDigit()
+                .frame(width: 112, alignment: .trailing)
         }
-        .padding(.vertical, 2)
+        .frame(minHeight: 60)
     }
 }
 
@@ -431,80 +468,120 @@ struct PayRecordDetailView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(payRecord.monthLabel)
+                        .font(.system(size: 25, weight: .bold))
+                        .foregroundStyle(EditorialStyle.titleColor)
+
                     Text(payRecord.employer?.name ?? "勤務先未設定")
-                        .font(.title3.weight(.semibold))
-                    Text("\(payRecord.monthLabel)・\(payRecord.incomeCategory.label)")
-                        .font(.subheadline)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
 
-            Section("金額") {
-                amountRow("総支給額（額面）", payRecord.grossAmount)
-                amountRow("手取り", payRecord.netAmount)
-                amountRow("控除合計", payRecord.deductionTotalForDisplay)
+                    Text(payRecord.incomeCategory.label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(appTheme.accentColor)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 20)
+                .background(Color(.systemBackground))
 
-                if let incomeTaxAmount = payRecord.incomeTaxAmount {
-                    amountRow("所得税", incomeTaxAmount)
-                }
-                if let residentTaxAmount = payRecord.residentTaxAmount {
-                    amountRow("住民税", residentTaxAmount)
-                }
+                HStack(spacing: 0) {
+                    summaryMetric("額面", payRecord.grossAmount)
 
-                ForEach(payRecord.sortedDeductionItems) { item in
-                    amountRow(item.displayNameSnapshot, item.amount)
-                }
+                    Divider()
+                        .frame(height: 58)
 
-                if payRecord.deductionItems.isEmpty,
-                   let socialInsuranceAmount = payRecord.socialInsuranceAmount {
-                    amountRow("社会保険料", socialInsuranceAmount)
+                    summaryMetric("手取り", payRecord.netAmount)
                 }
-                if let otherDeductionAmount = payRecord.otherDeductionAmount {
-                    amountRow(payRecord.deductionItems.isEmpty ? "その他控除" : "その他（推定）", otherDeductionAmount)
-                }
-            }
+                .padding(.vertical, 14)
+                .background(appTheme.accentColor.opacity(0.09))
 
-            if !payRecord.memo.isEmpty {
-                Section("メモ") {
-                    Text(payRecord.memo)
-                }
-            }
-
-            Section("添付書類") {
-                if documents.isEmpty {
-                    Text("この給与明細に紐づく書類はまだありません。")
-                        .font(.subheadline)
+                HStack {
+                    Text("控除合計")
                         .foregroundStyle(.secondary)
-                } else {
-                    ForEach(documents) { document in
-                        if let fileURL = DocumentFileStore.fileURL(for: document) {
-                            NavigationLink {
-                                DocumentPreviewView(
-                                    title: document.documentType.label,
-                                    fileType: document.attachmentFileType,
-                                    fileURL: fileURL
-                                )
-                            } label: {
+                    Spacer()
+                    Text(payRecord.deductionTotalForDisplay.map(\.yenText) ?? "未入力")
+                        .font(.system(size: 16, weight: .semibold))
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, 20)
+                .frame(minHeight: 48)
+                .background(Color(.systemBackground))
+
+                sectionGap
+
+                if hasDeductionBreakdown {
+                    ledgerSection(title: "控除の内訳") {
+                        ForEach(deductionBreakdownRows.indices, id: \.self) { index in
+                            let row = deductionBreakdownRows[index]
+                            amountRow(row.title, row.amount)
+                            if index < deductionBreakdownRows.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+
+                    sectionGap
+                }
+
+                ledgerSection(title: "添付書類") {
+                    if documents.isEmpty {
+                        Text("この給与明細に紐づく書類はまだありません。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(Array(documents.enumerated()), id: \.element.id) { index, document in
+                            if let fileURL = DocumentFileStore.fileURL(for: document) {
+                                NavigationLink {
+                                    DocumentPreviewView(
+                                        title: document.documentType.label,
+                                        fileType: document.attachmentFileType,
+                                        fileURL: fileURL
+                                    )
+                                } label: {
+                                    documentRow(document)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
                                 documentRow(document)
                             }
-                        } else {
-                            documentRow(document)
+                            if index < documents.count - 1 { Divider() }
                         }
+                    }
+
+                    if !documents.isEmpty {
+                        Divider()
+                    }
+                    NavigationLink {
+                        DocumentFormView(linkedPayRecord: payRecord)
+                    } label: {
+                        Label("書類を添付", systemImage: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                     }
                 }
 
-                NavigationLink {
-                    DocumentFormView(linkedPayRecord: payRecord)
-                } label: {
-                    Label("書類を添付", systemImage: "paperclip")
+                if !payRecord.memo.isEmpty {
+                    sectionGap
+
+                    ledgerSection(title: "メモ") {
+                        Text(payRecord.memo)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 12)
+                    }
                 }
             }
+            .padding(.bottom, 32)
         }
+        .background(Color(.systemBackground))
         .navigationTitle("給与明細")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("編集") {
@@ -519,29 +596,114 @@ struct PayRecordDetailView: View {
         }
     }
 
+    private var hasDeductionBreakdown: Bool {
+        !deductionBreakdownRows.isEmpty
+    }
+
+    private var deductionBreakdownRows: [(title: String, amount: Int)] {
+        var rows: [(title: String, amount: Int)] = []
+
+        if let incomeTaxAmount = payRecord.incomeTaxAmount {
+            rows.append(("所得税", incomeTaxAmount))
+        }
+        if let residentTaxAmount = payRecord.residentTaxAmount {
+            rows.append(("住民税", residentTaxAmount))
+        }
+
+        rows.append(contentsOf: payRecord.sortedDeductionItems.map {
+            ($0.displayNameSnapshot, $0.amount)
+        })
+
+        if payRecord.deductionItems.isEmpty,
+           let socialInsuranceAmount = payRecord.socialInsuranceAmount {
+            rows.append(("社会保険料", socialInsuranceAmount))
+        }
+        if let otherDeductionAmount = payRecord.otherDeductionAmount {
+            rows.append((
+                payRecord.deductionItems.isEmpty ? "その他控除" : "その他（推定）",
+                otherDeductionAmount
+            ))
+        }
+
+        return rows
+    }
+
+    private var sectionGap: some View {
+        Color(.systemGroupedBackground)
+            .frame(height: 8)
+    }
+
+    private func summaryMetric(_ title: String, _ amount: Int?) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(appTheme.accentColor)
+
+            Text(amount.map(\.yenText) ?? "未入力")
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(EditorialStyle.titleColor)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.74)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
+    private func ledgerSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(EditorialStyle.titleColor)
+                .padding(.top, 18)
+                .padding(.bottom, 9)
+
+            Divider()
+            content()
+        }
+        .padding(.horizontal, 20)
+        .background(Color(.systemBackground))
+    }
+
     private func amountRow(_ title: String, _ amount: Int?) -> some View {
         HStack {
             Text(title)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             Spacer()
             Text(amount.map(\.yenText) ?? "未入力")
-                .font(.headline)
+                .font(.system(size: 14, weight: .semibold))
+                .monospacedDigit()
         }
+        .frame(minHeight: 48)
     }
 
     private func documentRow(_ document: DocumentAttachment) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
+            Image(systemName: document.attachmentFileType == .pdf ? "doc.text" : "photo")
                 .foregroundStyle(appTheme.accentColor)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.documentType.label)
-                Text(document.originalFileName ?? "ファイル名未設定")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(documentSubtitle(document))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
+        .frame(minHeight: 58)
+    }
+
+    private func documentSubtitle(_ document: DocumentAttachment) -> String {
+        let employerName = document.employer?.name ?? payRecord.employer?.name ?? "勤務先未設定"
+        let month = document.documentMonth ?? payRecord.paymentMonth
+        return "\(document.documentYear)年\(month)月 / \(employerName)"
     }
 }
 

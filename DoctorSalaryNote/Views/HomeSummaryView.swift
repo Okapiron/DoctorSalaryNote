@@ -70,31 +70,25 @@ struct HomeSummaryView: View {
     }
 
     private var recentRecords: [PayRecord] {
-        Array(payRecords.prefix(3))
+        Array(payRecords.prefix(5))
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                currentMonthImportButton
+            VStack(alignment: .leading, spacing: 0) {
+                homeHeader
                 latestMonthSection
+                sectionBreak
                 monthlyTrendSection
+                sectionBreak
                 yearSummarySection
+                sectionBreak
                 recentRecordsSection
             }
-            .padding()
+            .padding(.bottom, 104)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("ホーム")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Label("設定", systemImage: "gearshape")
-                }
-            }
-        }
+        .background(Color(.systemBackground))
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isAddingCurrentMonthRecord) {
             NavigationStack {
                 PayRecordFormView(showsImportOptionsOnAppear: true)
@@ -102,166 +96,243 @@ struct HomeSummaryView: View {
         }
     }
 
-    private var currentMonthImportButton: some View {
-        Button {
-            isAddingCurrentMonthRecord = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+    private var homeHeader: some View {
+        HStack(spacing: 14) {
+            Text("ホーム")
+                .font(.system(size: 17, weight: .semibold))
 
-                Text("今月の記録を取り込む")
-                    .font(.headline)
+            Spacer(minLength: 12)
 
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .opacity(0.8)
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 52)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(appTheme.accentColor)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("今月の給与明細を追加し、PDFや写真から読み取れます")
-    }
-
-    private var monthlyTrendSection: some View {
-        homeCard(tint: .teal) {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
-                    title: "直近の月別給与",
-                    subtitle: "今月まで6か月の額面と手取り",
-                    systemImage: "chart.bar.xaxis"
-                )
-
-                if payRecords.isEmpty {
-                    ContentUnavailableView(
-                        "給与明細を登録すると、月別の推移が表示されます",
-                        systemImage: "chart.bar.xaxis",
-                        description: Text("まずは勤務先と給与明細を登録してください。")
-                    )
-                    .frame(minHeight: 170)
-                } else {
-                    Chart {
-                        ForEach(recentMonthSummaries) { summary in
-                            BarMark(
-                                x: .value("月", summary.shortLabel),
-                                y: .value("額面", summary.grossTotal)
-                            )
-                            .foregroundStyle(appTheme.chartGrossColor.gradient)
-                            .cornerRadius(4)
-                        }
-
-                        ForEach(recentMonthLinePoints) { summary in
-                            LineMark(
-                                x: .value("月", summary.shortLabel),
-                                y: .value("手取り", summary.netTotal),
-                                series: .value("連続区間", summary.segment)
-                            )
-                            .foregroundStyle(appTheme.chartNetColor)
-                            .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
-
-                            PointMark(
-                                x: .value("月", summary.shortLabel),
-                                y: .value("手取り", summary.netTotal)
-                            )
-                            .foregroundStyle(appTheme.chartNetColor)
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisGridLine()
-                            AxisValueLabel {
-                                if let amount = value.as(Int.self) {
-                                    Text(shortYenText(amount))
-                                }
+            Button {
+                isAddingCurrentMonthRecord = true
+            } label: {
+                Label("給与明細を取り込む", systemImage: "doc.viewfinder")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(appTheme.accentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(appTheme.accentColor.opacity(0.09))
+                            .overlay {
+                                Capsule()
+                                    .stroke(appTheme.accentColor.opacity(0.22), lineWidth: 1)
                             }
-                        }
                     }
-                    .frame(height: 190)
-                }
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("給与明細を追加し、PDFや写真から読み取れます")
+
+            NavigationLink {
+                SettingsView()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(appTheme.accentColor)
+                    .frame(width: 32, height: 32)
+            }
+            .accessibilityLabel("設定")
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 22)
     }
 
     private var latestMonthSection: some View {
-        homeCard(tint: .blue) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    headerIcon("calendar.badge.clock")
-                    Text("\(latestMonthSummary.longLabel)の給与")
-                        .font(.headline)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(latestMonthSummary.longLabel)の給与")
+                    .font(.system(size: 17, weight: .semibold))
 
-                    Spacer()
+                Spacer()
 
-                    if latestMonthSummary.records.isEmpty {
-                        Text("未登録")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                HStack(spacing: 10) {
-                    latestMonthAmount(
-                        "額面",
-                        latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal),
-                        tint: appTheme.accentColor
-                    )
-
-                    latestMonthAmount(
-                        "手取り",
-                        latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText,
-                        tint: appTheme.accentColor
-                    )
+                if latestMonthSummary.records.isEmpty {
+                    Text("未登録")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 14)
+
+            HStack(alignment: .top, spacing: 18) {
+                latestMonthAmount(
+                    "額面",
+                    latestMonthSummary.records.isEmpty ? "未登録" : yenText(latestMonthSummary.grossTotal)
+                )
+
+                Divider()
+                    .frame(height: 56)
+
+                latestMonthAmount(
+                    "手取り",
+                    latestMonthSummary.records.isEmpty ? "未登録" : latestMonthSummary.netDisplayText
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .background(appTheme.accentColor.opacity(0.07))
         }
+        .padding(.bottom, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func latestMonthAmount(_ title: String, _ value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func latestMonthAmount(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(appTheme.accentColor)
             Text(value)
-                .font(.headline)
+                .font(.system(size: 28, weight: .medium))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.62)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(tint.opacity(0.12))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var monthlyTrendSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("直近6か月")
+                    .font(.system(size: 16, weight: .semibold))
+
+                Spacer()
+
+                if !payRecords.isEmpty {
+                    HStack(spacing: 14) {
+                        trendLegend(color: appTheme.chartGrossColor, title: "額面")
+                        trendLegend(color: appTheme.chartNetColor, title: "手取り", showsLine: true)
+                    }
+                }
+            }
+
+            if payRecords.isEmpty {
+                Text("給与明細を登録すると、月別の推移が表示されます。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 150, alignment: .center)
+            } else {
+                Chart {
+                    ForEach(recentMonthSummaries) { summary in
+                        BarMark(
+                            x: .value("月", summary.axisLabel),
+                            y: .value("額面", summary.grossTotal)
+                        )
+                        .foregroundStyle(appTheme.chartGrossColor.opacity(0.78))
+                        .cornerRadius(3)
+                    }
+
+                    ForEach(recentMonthLinePoints) { summary in
+                        LineMark(
+                            x: .value("月", summary.axisLabel),
+                            y: .value("手取り", summary.netTotal),
+                            series: .value("連続区間", summary.segment)
+                        )
+                        .foregroundStyle(appTheme.chartNetColor)
+                        .lineStyle(.init(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                        PointMark(
+                            x: .value("月", summary.axisLabel),
+                            y: .value("手取り", summary.netTotal)
+                        )
+                        .foregroundStyle(appTheme.chartNetColor)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks { value in
+                        AxisTick().foregroundStyle(Color(.systemGray4))
+                        AxisValueLabel {
+                            if let month = value.as(String.self) {
+                                Text(month)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine()
+                            .foregroundStyle(Color(.systemGray5))
+                        AxisValueLabel {
+                            if let amount = value.as(Int.self) {
+                                Text(chartAxisText(amount))
+                                    .font(.caption2)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+                }
+                .chartPlotStyle { plotArea in
+                    plotArea.background(Color.clear)
+                }
+                .frame(height: 210)
+            }
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
     }
 
     private var yearSummarySection: some View {
-        homeCard(tint: .indigo) {
-            VStack(alignment: .leading, spacing: 12) {
-                Stepper(value: $selectedYear, in: 2000...2100) {
-                    HStack(spacing: 10) {
-                        headerIcon("calendar")
-                        Text(verbatim: "\(selectedYear)年の合計")
-                            .font(.headline)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(verbatim: "\(selectedYear)年の合計")
+                    .font(.system(size: 16, weight: .semibold))
 
-                HStack(spacing: 12) {
-                    compactAmount("額面", selectedYearSummary.grossTotal)
-                    compactAmount("手取り", selectedYearSummary.netDisplayText)
-                    compactAmount("控除", selectedYearSummary.deductionTotal)
-                }
+                Spacer()
+
+                Stepper("表示年", value: $selectedYear, in: 2000...2100)
+                    .labelsHidden()
+                    .fixedSize()
+            }
+
+            Rectangle()
+                .fill(appTheme.accentColor)
+                .frame(width: 54, height: 2)
+
+            HStack(alignment: .top, spacing: 12) {
+                compactAmount("額面", selectedYearSummary.grossTotal)
+                Divider().frame(height: 46)
+                compactAmount("手取り", selectedYearSummary.netDisplayText)
+                Divider().frame(height: 46)
+                compactAmount("控除", selectedYearSummary.deductionTotal)
             }
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+    }
+
+    private func trendLegend(color: Color, title: String, showsLine: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            if showsLine {
+                Capsule()
+                    .fill(color)
+                    .frame(width: 20, height: 3)
+                    .overlay {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 7, height: 7)
+                    }
+            } else {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color.opacity(0.78))
+                    .frame(width: 15, height: 10)
+            }
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func chartAxisText(_ amount: Int) -> String {
+        String(Int((Double(amount) / 10_000).rounded()))
+    }
+
+    private var sectionBreak: some View {
+        Divider()
+            .padding(.horizontal, 20)
+            .accessibilityHidden(true)
     }
 
     private func compactAmount(_ title: String, _ amount: Int) -> some View {
@@ -274,84 +345,49 @@ struct HomeSummaryView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 16, weight: .medium))
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.65)
+                .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var recentRecordsSection: some View {
-        homeCard(tint: .mint) {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader(
-                    title: "最近の給与明細",
-                    subtitle: "登録した給与明細をすぐ確認",
-                    systemImage: "clock"
-                )
+        VStack(alignment: .leading, spacing: 12) {
+            Text("最近の給与明細")
+                .font(.system(size: 16, weight: .semibold))
 
-                if recentRecords.isEmpty {
-                    Text("給与明細を登録すると、直近3件がここに表示されます。")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 12)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(recentRecords) { record in
-                            NavigationLink {
-                                PayRecordDetailView(payRecord: record)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    RecentPayRecordRow(record: record)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
+            if recentRecords.isEmpty {
+                Text("給与明細を登録すると、直近5件がここに表示されます。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(recentRecords) { record in
+                        NavigationLink {
+                            PayRecordDetailView(payRecord: record)
+                        } label: {
+                            HStack(spacing: 12) {
+                                RecentPayRecordRow(record: record)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            .buttonStyle(.plain)
+                        }
+                        .buttonStyle(.plain)
 
-                            if record.persistentModelID != recentRecords.last?.persistentModelID {
-                                Divider()
-                            }
+                        if record.persistentModelID != recentRecords.last?.persistentModelID {
+                            Divider()
                         }
                     }
                 }
             }
         }
-    }
-
-    private func homeCard<Content: View>(tint _: Color, @ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.background)
-                    .shadow(color: appTheme.accentColor.opacity(0.10), radius: 10, y: 4)
-            )
-    }
-
-    private func sectionHeader(title: String, subtitle: String, systemImage: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            headerIcon(systemImage)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func headerIcon(_ systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(appTheme.accentColor)
-            .frame(width: 28, height: 28)
-            .background(appTheme.accentColor.opacity(0.12))
-            .clipShape(Circle())
+        .padding(.horizontal, 20)
+        .padding(.vertical, 24)
     }
 }
 
@@ -370,7 +406,7 @@ private struct HomeMonthSummary: Identifiable {
     let records: [PayRecord]
 
     var id: MonthKey { key }
-    var shortLabel: String { "\(key.month)月" }
+    var axisLabel: String { "\(key.month)" }
     var longLabel: String { "\(key.year)年\(key.month)月" }
     var grossTotal: Int { records.reduce(0) { $0 + $1.grossAmount } }
     var netTotal: Int { records.reduce(0) { $0 + $1.netAmountForAggregation } }
@@ -385,7 +421,7 @@ private struct HomeTrendLinePoint: Identifiable {
     let segment: Int
 
     var id: String { "\(segment)-\(summary.key.year)-\(summary.key.month)" }
-    var shortLabel: String { summary.shortLabel }
+    var axisLabel: String { summary.axisLabel }
     var netTotal: Int { summary.netTotal }
 }
 
@@ -401,32 +437,27 @@ private struct HomeYearSummary {
 }
 
 private struct RecentPayRecordRow: View {
-    @Environment(\.appTheme) private var appTheme
-
     let record: PayRecord
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(verbatim: "\(record.paymentYear)年\(record.paymentMonth)月")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(record.incomeCategory.label)
-                    .font(.caption)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: "\(record.paymentYear)年\(record.paymentMonth)月分")
+                    .font(.system(size: 15, weight: .medium))
+
+                Text(record.employer?.name ?? "勤務先未設定")
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Text(record.employer?.name ?? "勤務先未設定")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 12)
 
-            HStack {
-                Text("額面 \(yenText(record.grossAmount))")
-                Spacer()
-                Text("手取り \(record.netAmount.map(yenText) ?? "未入力")")
-                    .foregroundStyle(appTheme.accentColor)
-            }
-            .font(.caption)
+            Text(yenText(record.grossAmount))
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .monospacedDigit()
         }
         .padding(.vertical, 10)
     }

@@ -51,6 +51,7 @@ struct AnalysisView: View {
                 label: $0.label,
                 grossTotal: $0.grossTotal,
                 netTotal: $0.netTotal,
+                hasData: !$0.records.isEmpty,
                 hasNetAmount: $0.hasNetAmount
             )
         }
@@ -63,6 +64,7 @@ struct AnalysisView: View {
                 label: $0.label,
                 grossTotal: $0.grossTotal,
                 netTotal: $0.netTotal,
+                hasData: !$0.records.isEmpty,
                 hasNetAmount: $0.hasNetAmount
             )
         }
@@ -131,8 +133,6 @@ struct AnalysisView: View {
         ScrollViewReader { scrollProxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    yearSelector
-
                     if payRecords.isEmpty {
                         emptyState
                     } else {
@@ -143,8 +143,9 @@ struct AnalysisView: View {
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .background(EditorialStyle.pageBackground)
             .navigationTitle("分析")
+            .navigationBarTitleDisplayMode(.inline)
             .transaction { transaction in
                 transaction.disablesAnimations = true
                 transaction.animation = nil
@@ -166,20 +167,6 @@ struct AnalysisView: View {
         }
     }
 
-    private var yearSelector: some View {
-        analysisCard(tint: .teal) {
-            Stepper(value: $selectedYear, in: 2000...2100) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: "\(selectedYear)年")
-                        .font(.title3.weight(.semibold))
-                    Text("年別で収入の推移と内訳を確認します")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
     private var emptyState: some View {
         ContentUnavailableView(
             "分析できる給与明細がありません",
@@ -191,7 +178,7 @@ struct AnalysisView: View {
 
     private var trendSection: some View {
         analysisCard(tint: .blue) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 yearControlHeader(
                     title: "推移",
                     subtitle: trendScope == .monthly ? "\(selectedYearTitle)の月別推移" : "\(selectedYearTitle)までの5年推移",
@@ -243,20 +230,34 @@ struct AnalysisView: View {
             } else {
                 trendDataChart(points: monthlyTrendPoints, axisMax: monthlyAxisMax)
 
-                HStack {
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(verbatim: "\(selectedYear)年合計")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(yenText(selectedYearGrossTotal))
-                            .font(.subheadline.weight(.semibold))
-                            .monospacedDigit()
-                    }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Spacer(minLength: 0)
+                    Text(verbatim: "\(selectedYear)年合計")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(yenText(selectedYearGrossTotal))
+                        .font(.headline.weight(.semibold))
+                        .monospacedDigit()
                 }
-                .padding(.trailing, 4)
+                .padding(.vertical, 2)
 
                 VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        Text("月")
+                            .frame(width: 40, alignment: .leading)
+                        Text("額面")
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        Text("手取り")
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        Text("控除")
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+
+                    Divider()
+
                     ForEach(monthlySummaries.filter { !$0.records.isEmpty }) { summary in
                         MonthSummaryRow(summary: summary)
 
@@ -273,7 +274,7 @@ struct AnalysisView: View {
         VStack(alignment: .leading, spacing: 18) {
             sectionHeader(
                 title: "内訳分析",
-                subtitle: "\(selectedYearTitle)の勤務先別・収入区分別"
+                subtitle: "勤務先や収入区分ごとの収入を比較"
             )
             employerBreakdownSection
             incomeCategoryBreakdownSection
@@ -312,7 +313,7 @@ struct AnalysisView: View {
         let visibleSummaries = Array(summaries.prefix(8))
         let yearlyGrossTotal = max(selectedYearGrossTotal, 1)
 
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 14) {
             if summaries.isEmpty {
                 Text(emptyMessage)
                     .font(.subheadline)
@@ -320,7 +321,7 @@ struct AnalysisView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 24)
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     ForEach(Array(visibleSummaries.enumerated()), id: \.element.id) { index, summary in
                         InfographicBreakdownRow(
                             rank: index + 1,
@@ -331,8 +332,8 @@ struct AnalysisView: View {
                 }
 
                 HStack(spacing: 12) {
-                    LegendDot(color: appTheme.chartGrossColor, text: "額面")
-                    LegendDot(color: appTheme.chartNetColor, text: "手取り")
+                    LegendMark(color: appTheme.chartGrossColor, text: "額面", shape: .bar)
+                    LegendMark(color: appTheme.chartNetColor, text: "手取り", shape: .point)
                 }
                 .font(.caption)
 
@@ -350,13 +351,7 @@ struct AnalysisView: View {
     }
 
     private func analysisCard<Content: View>(tint _: Color, @ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.background)
-                    .shadow(color: appTheme.accentColor.opacity(0.10), radius: 10, y: 4)
-            )
+        EditorialCard(content: content)
     }
 
     private func sectionHeader(title: String, subtitle: String) -> some View {
@@ -381,21 +376,28 @@ struct AnalysisView: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button {
                     moveSelectedYear(by: -1, keeping: scrollTarget)
                 } label: {
-                    Text("＜")
-                        .font(.headline.weight(.semibold))
+                    Image(systemName: "chevron.left")
+                        .font(.subheadline.weight(.bold))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("前年へ")
 
+                Text(verbatim: "\(selectedYear)年")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
                 Button {
                     moveSelectedYear(by: 1, keeping: scrollTarget)
                 } label: {
-                    Text("＞")
-                        .font(.headline.weight(.semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.bold))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("翌年へ")
@@ -443,13 +445,13 @@ struct AnalysisView: View {
         }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                LegendDot(color: appTheme.chartGrossColor, text: "額面")
-                LegendDot(color: appTheme.chartNetColor, text: "手取り")
+                LegendMark(color: appTheme.chartGrossColor, text: "額面", shape: .bar)
+                LegendMark(color: appTheme.chartNetColor, text: "手取り", shape: .point)
             }
             .font(.caption)
 
             Chart {
-                ForEach(points) { point in
+                ForEach(points.filter(\.hasData)) { point in
                     BarMark(
                         x: .value("期間", point.label),
                         y: .value("総支給額", point.grossTotal),
@@ -467,17 +469,18 @@ struct AnalysisView: View {
                     )
                     .foregroundStyle(appTheme.chartNetColor)
                     .interpolationMethod(.linear)
-                    .lineStyle(.init(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .lineStyle(.init(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
 
                     PointMark(
                         x: .value("期間", point.label),
                         y: .value("手取り", point.netTotal)
                     )
                     .foregroundStyle(appTheme.chartNetColor)
-                    .symbolSize(24)
+                    .symbolSize(30)
                 }
             }
             .chartLegend(.hidden)
+            .chartXScale(domain: points.map(\.label))
             .chartYScale(domain: 0...axisMax)
             .chartYAxis {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
@@ -536,6 +539,7 @@ private struct TrendPoint: Identifiable {
     let label: String
     let grossTotal: Int
     let netTotal: Int
+    let hasData: Bool
     let hasNetAmount: Bool
 }
 
@@ -669,29 +673,24 @@ private struct MonthSummaryRow: View {
     let summary: AnalysisMonthSummary
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             Text(summary.label)
                 .font(.subheadline.weight(.semibold))
-                .frame(width: 42, alignment: .leading)
-            amountText("額面", summary.grossTotal)
-            Spacer()
-            amountText("手取り", summary.netTotal)
-            Spacer()
-            amountText("控除", summary.deductionTotal)
+                .frame(width: 40, alignment: .leading)
+            amountText(summary.grossTotal)
+            amountText(summary.netTotal)
+            amountText(summary.deductionTotal)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
     }
 
-    private func amountText(_ title: String, _ amount: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(shortYenText(amount))
-                .font(.caption)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
+    private func amountText(_ amount: Int) -> some View {
+        Text(shortYenText(amount))
+            .font(.caption)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 
@@ -699,35 +698,35 @@ private struct BreakdownRow: View {
     let summary: BreakdownSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(summary.label)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Spacer()
                 Text("\(summary.count)件")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack {
-                amountText("額面", summary.grossTotal)
-                Spacer()
-                amountText("手取り", summary.netTotal)
-            }
+            amountText("額面", summary.grossTotal)
+                .frame(width: 92, alignment: .trailing)
+            amountText("手取り", summary.netTotal)
+                .frame(width: 86, alignment: .trailing)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
     }
 
     private func amountText(_ title: String, _ amount: Int) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .trailing, spacing: 2) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(yenText(amount))
-                .font(.caption)
+                .font(.caption2)
+                .monospacedDigit()
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.68)
         }
     }
 }
@@ -779,16 +778,7 @@ private struct InfographicBreakdownRow: View {
                         .fill(Color(.systemGray5))
 
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    appTheme.chartGrossColor.opacity(0.46),
-                                    appTheme.chartGrossColor.opacity(0.88)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .fill(appTheme.chartGrossColor.opacity(0.78))
                         .frame(width: grossWidth)
 
                     if summary.hasNetAmount {
@@ -803,7 +793,7 @@ private struct InfographicBreakdownRow: View {
                     }
                 }
             }
-            .frame(height: 12)
+            .frame(height: 8)
 
             HStack {
                 Spacer()
@@ -817,15 +807,30 @@ private struct InfographicBreakdownRow: View {
     }
 }
 
-private struct LegendDot: View {
+private enum LegendMarkShape {
+    case bar
+    case point
+}
+
+private struct LegendMark: View {
     let color: Color
     let text: String
+    let shape: LegendMarkShape
 
     var body: some View {
         HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
+            Group {
+                switch shape {
+                case .bar:
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color)
+                        .frame(width: 10, height: 10)
+                case .point:
+                    Circle()
+                        .fill(color)
+                        .frame(width: 8, height: 8)
+                }
+            }
             Text(text)
                 .foregroundStyle(.secondary)
         }

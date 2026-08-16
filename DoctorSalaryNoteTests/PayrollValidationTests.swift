@@ -74,17 +74,26 @@ final class PayrollValidationTests: XCTestCase {
             sortOrder: 0,
             inputSource: .ocr
         )
+        let document = DocumentAttachment(
+            employer: employer,
+            payRecord: record,
+            documentYear: 2026,
+            documentMonth: 8,
+            documentType: .payslip
+        )
 
         context.insert(employer)
         context.insert(record)
         context.insert(template)
         context.insert(item)
+        context.insert(document)
         try context.save()
 
         XCTAssertEqual(try context.fetch(FetchDescriptor<Employer>()).count, 1)
         XCTAssertEqual(try context.fetch(FetchDescriptor<PayRecord>()).first?.grossAmount, 600_000)
         XCTAssertEqual(try context.fetch(FetchDescriptor<EmployerDeductionTemplate>()).count, 1)
         XCTAssertEqual(try context.fetch(FetchDescriptor<PayRecordDeductionItem>()).first?.amount, 30_000)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<DocumentAttachment>()).first?.documentMonth, 8)
     }
 
     @MainActor

@@ -32,6 +32,14 @@ struct EmployerListView: View {
         }
     }
 
+    private var activeEmployers: [Employer] {
+        displayedEmployers.filter { !$0.isArchived }
+    }
+
+    private var archivedEmployers: [Employer] {
+        displayedEmployers.filter(\.isArchived)
+    }
+
     var body: some View {
         List {
             if employers.isEmpty {
@@ -41,62 +49,53 @@ struct EmployerListView: View {
                     description: Text("常勤先、外勤先、当直先など、収入が発生する勤務先を右上の追加ボタンから登録できます。")
                 )
             } else {
-                ForEach(displayedEmployers) { employer in
-                    NavigationLink {
-                        EmployerFormView(employer: employer)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(employer.name)
-                                    .font(.headline)
-                                if employer.isArchived {
-                                    Text("無効")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Text(employer.employerType.label)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            if let category = employer.defaultIncomeCategory {
-                                Text("既定: \(category.label)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                if !activeEmployers.isEmpty {
+                    Section {
+                        ForEach(Array(activeEmployers.enumerated()), id: \.element.persistentModelID) { index, employer in
+                            employerLink(employer, rank: index + 1, canReorder: true)
                         }
-                    }
-                    .onDrag {
-                        let id = employerID(for: employer)
-                        draggedEmployerID = id
-                        return NSItemProvider(object: "\(id)" as NSString)
-                    }
-                    .onDrop(
-                        of: [UTType.text],
-                        delegate: EmployerDropDelegate(
-                            targetEmployerID: employerID(for: employer),
-                            draggedEmployerID: $draggedEmployerID,
-                            moveEmployer: reorderEmployer
+                        .onMove(perform: moveActiveEmployers)
+                        .onDelete { offsets in
+                            deleteEmployers(at: offsets, from: activeEmployers)
+                        }
+                    } header: {
+                        employerSectionHeader(
+                            title: "登録済みの勤務先",
+                            count: activeEmployers.count
                         )
-                    )
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button {
-                            payRecordEmployer = employer
-                        } label: {
-                            Label("給与入力", systemImage: "yensign.circle")
-                        }
-                        .tint(appTheme.accentColor)
+                    } footer: {
+                        Label("右端を長押しして表示順を変更", systemImage: "arrow.up.arrow.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
                     }
                 }
-                .onMove(perform: moveEmployers)
-                .onDelete(perform: deleteEmployers)
+
+                if !archivedEmployers.isEmpty {
+                    Section {
+                        ForEach(archivedEmployers) { employer in
+                            employerLink(employer, rank: nil, canReorder: false)
+                                .opacity(0.62)
+                        }
+                        .onDelete { offsets in
+                            deleteEmployers(at: offsets, from: archivedEmployers)
+                        }
+                    } header: {
+                        employerSectionHeader(
+                            title: "無効な勤務先",
+                            count: archivedEmployers.count
+                        )
+                    }
+                }
             }
         }
+        .listStyle(.plain)
+        .listSectionSpacing(18)
+        .scrollContentBackground(.hidden)
+        .background(EditorialStyle.pageBackground)
         .navigationTitle("勤務先")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                EditButton()
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isAddingEmployer = true
@@ -137,11 +136,71 @@ struct EmployerListView: View {
         }
     }
 
-    private func moveEmployers(from source: IndexSet, to destination: Int) {
-        var reorderedEmployers = displayedEmployers
+    @ViewBuilder
+    private func employerLink(
+        _ employer: Employer,
+        rank: Int?,
+        canReorder: Bool
+    ) -> some View {
+        NavigationLink {
+            EmployerFormView(employer: employer)
+        } label: {
+            EmployerManagementRow(
+                employer: employer,
+                rank: rank,
+                canReorder: canReorder
+            )
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 14))
+        .listRowBackground(Color(.systemBackground))
+        .listRowSeparatorTint(EditorialStyle.divider)
+        .onDrag {
+            guard canReorder else {
+                return NSItemProvider()
+            }
+
+            let id = employerID(for: employer)
+            draggedEmployerID = id
+            return NSItemProvider(object: "\(id)" as NSString)
+        }
+        .onDrop(
+            of: canReorder ? [UTType.text] : [],
+            delegate: EmployerDropDelegate(
+                targetEmployerID: employerID(for: employer),
+                draggedEmployerID: $draggedEmployerID,
+                moveEmployer: reorderEmployer
+            )
+        )
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                payRecordEmployer = employer
+            } label: {
+                Label("給与入力", systemImage: "yensign.circle")
+            }
+            .tint(appTheme.accentColor)
+        }
+    }
+
+    private func employerSectionHeader(title: String, count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+            Spacer()
+            Text("\(count)件")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .textCase(nil)
+        .padding(.bottom, 4)
+    }
+
+    private func moveActiveEmployers(from source: IndexSet, to destination: Int) {
+        var reorderedEmployers = activeEmployers
         reorderedEmployers.move(fromOffsets: source, toOffset: destination)
 
-        applySortOrder(to: reorderedEmployers)
+        applySortOrder(to: reorderedEmployers + archivedEmployers)
     }
 
     private func reorderEmployer(
@@ -152,7 +211,7 @@ struct EmployerListView: View {
             return
         }
 
-        var reorderedEmployers = displayedEmployers
+        var reorderedEmployers = activeEmployers
         guard let sourceIndex = reorderedEmployers.firstIndex(where: { employerID(for: $0) == draggedEmployerID }),
               let targetIndex = reorderedEmployers.firstIndex(where: { employerID(for: $0) == targetEmployerID }) else {
             return
@@ -160,7 +219,7 @@ struct EmployerListView: View {
 
         let draggedEmployer = reorderedEmployers.remove(at: sourceIndex)
         reorderedEmployers.insert(draggedEmployer, at: targetIndex)
-        applySortOrder(to: reorderedEmployers)
+        applySortOrder(to: reorderedEmployers + archivedEmployers)
     }
 
     private func applySortOrder(to reorderedEmployers: [Employer]) {
@@ -181,8 +240,8 @@ struct EmployerListView: View {
         employer.persistentModelID
     }
 
-    private func deleteEmployers(at offsets: IndexSet) {
-        let targets = offsets.map { displayedEmployers[$0] }
+    private func deleteEmployers(at offsets: IndexSet, from source: [Employer]) {
+        let targets = offsets.map { source[$0] }
         if let blockedEmployer = targets.first(where: hasAssociatedData) {
             blockedEmployerName = blockedEmployer.name
             return
@@ -208,6 +267,71 @@ struct EmployerListView: View {
         return documents.contains {
             $0.employer?.persistentModelID == employer.persistentModelID
         }
+    }
+}
+
+private struct EmployerManagementRow: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let employer: Employer
+    let rank: Int?
+    let canReorder: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(rank.map { String(format: "%02d", $0) } ?? "–")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(appTheme.accentColor)
+                .monospacedDigit()
+                .frame(width: 27, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(employer.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if employer.isArchived {
+                        Text("無効")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color(.systemGray5))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                }
+
+                Text(metadata)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 4)
+
+            if canReorder {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("長押しして並べ替え")
+            }
+        }
+        .frame(minHeight: 66)
+        .contentShape(Rectangle())
+    }
+
+    private var metadata: String {
+        if employer.isArchived {
+            return "\(employer.employerType.label) / 過去の給与明細は保持"
+        }
+
+        if let category = employer.defaultIncomeCategory {
+            return "\(employer.employerType.label) / 既定：\(category.label)"
+        }
+
+        return "\(employer.employerType.label) / 既定：未設定"
     }
 }
 

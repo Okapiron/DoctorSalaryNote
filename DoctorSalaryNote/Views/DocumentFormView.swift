@@ -25,6 +25,7 @@ struct DocumentFormView: View {
 
     @State private var documentType: DocumentType
     @State private var documentYear: Int
+    @State private var documentMonth: Int
     @State private var selectedEmployerID: PersistentIdentifier?
     @State private var selectedPayRecordID: PersistentIdentifier?
     @State private var memo: String
@@ -56,6 +57,9 @@ struct DocumentFormView: View {
 
         _documentType = State(initialValue: initialType)
         _documentYear = State(initialValue: document?.documentYear ?? initialPayRecord?.paymentYear ?? initialYear)
+        _documentMonth = State(initialValue: document?.documentMonth
+            ?? initialPayRecord?.paymentMonth
+            ?? Calendar.current.component(.month, from: document?.createdAt ?? Date()))
         _selectedEmployerID = State(initialValue: document?.employer?.persistentModelID ?? initialPayRecord?.employer?.persistentModelID ?? initialEmployer?.persistentModelID)
         _selectedPayRecordID = State(initialValue: initialPayRecord?.persistentModelID)
         _memo = State(initialValue: document?.memo ?? "")
@@ -123,6 +127,10 @@ struct DocumentFormView: View {
                 } else {
                     Stepper(value: $documentYear, in: 2000...2100) {
                         Text(verbatim: "対象年 \(documentYear)年")
+                    }
+
+                    Stepper(value: $documentMonth, in: 1...12) {
+                        Text(verbatim: "対象月 \(documentMonth)月")
                     }
 
                     Picker(documentType.requiresEmployer ? "勤務先（必須）" : "勤務先", selection: $selectedEmployerID) {
@@ -260,6 +268,7 @@ struct DocumentFormView: View {
         }
 
         documentYear = selectedPayRecord.paymentYear
+        documentMonth = selectedPayRecord.paymentMonth
         selectedEmployerID = selectedPayRecord.employer?.persistentModelID
     }
 
@@ -269,6 +278,7 @@ struct DocumentFormView: View {
         var resolvedEmployer = selectedEmployer
         var resolvedPayRecord: PayRecord?
         var resolvedYear = documentYear
+        var resolvedMonth = documentMonth
 
         if documentType.requiresPayRecord {
             guard let selectedPayRecord else {
@@ -278,6 +288,7 @@ struct DocumentFormView: View {
             resolvedPayRecord = selectedPayRecord
             resolvedEmployer = selectedPayRecord.employer
             resolvedYear = selectedPayRecord.paymentYear
+            resolvedMonth = selectedPayRecord.paymentMonth
         } else if documentType.requiresEmployer {
             guard resolvedEmployer != nil else {
                 showValidation("\(documentType.label)は勤務先を選択してください。")
@@ -293,6 +304,7 @@ struct DocumentFormView: View {
         if let document {
             document.documentType = documentType
             document.documentYear = resolvedYear
+            document.documentMonth = resolvedMonth
             document.employer = resolvedEmployer
             document.payRecord = resolvedPayRecord
             document.attachmentFileType = attachmentFileType
@@ -308,6 +320,7 @@ struct DocumentFormView: View {
                 employer: resolvedEmployer,
                 payRecord: resolvedPayRecord,
                 documentYear: resolvedYear,
+                documentMonth: resolvedMonth,
                 documentType: documentType,
                 title: "",
                 attachmentFileType: attachmentFileType,

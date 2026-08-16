@@ -19,9 +19,6 @@ struct SettingsView: View {
     @Query private var documents: [DocumentAttachment]
     @Query private var appSettings: [AppSettings]
 
-    @State private var selectedCSVYear = 0
-    @State private var csvFileURL: URL?
-    @State private var csvMessage: String?
     @State private var securityMessage: String?
     @State private var appIconMessage: String?
     @State private var deleteMessage: String?
@@ -32,20 +29,19 @@ struct SettingsView: View {
         appSettings.first
     }
 
-    private var availableYears: [Int] {
-        Array(Set(payRecords.map(\.paymentYear))).sorted(by: >)
-    }
-
     var body: some View {
         List {
             appearanceSection
             securitySection
-            csvSection
             dataManagementSection
             informationSection
         }
         .tint(selectedAppTheme.accentColor)
+        .listSectionSpacing(18)
+        .scrollContentBackground(.hidden)
+        .background(EditorialStyle.pageBackground)
         .navigationTitle("設定")
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: ensureSettings)
         .onChange(of: storedAppTheme) { _, _ in
             guard selectedAppIconChoice == .followTheme else {
@@ -119,11 +115,17 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
 
-            Picker("ホーム画面アイコン", selection: $storedAppIconChoice) {
+            Picker(selection: $storedAppIconChoice) {
                 ForEach(AppIconChoice.allCases) { choice in
                     Text(choice.label).tag(choice.rawValue)
                 }
+            } label: {
+                SettingsRowLabel(
+                    systemImage: "app.dashed",
+                    title: "ホーム画面アイコン"
+                )
             }
+            .pickerStyle(.navigationLink)
 
             if let appIconMessage {
                 Text(appIconMessage)
@@ -131,9 +133,9 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("テーマカラー")
+            settingsSectionHeader("外観")
         } footer: {
-            Text("ボタン、タブ、主要アイコン、グラフの色を変更します。ホーム画面アイコンの変更時は、iOSの確認が表示されます。")
+            Text("テーマはボタン、タブ、主要アイコン、グラフへ反映されます。")
         }
     }
 
@@ -143,12 +145,11 @@ struct SettingsView: View {
                 get: { settings?.isBiometricLockEnabled ?? false },
                 set: setBiometricLockEnabled
             )) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(BiometricAuthenticator.biometryLabel())ロック")
-                    Text("起動時や復帰時に認証してから内容を表示します。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                SettingsRowLabel(
+                    systemImage: "faceid",
+                    title: "\(BiometricAuthenticator.biometryLabel())ロック",
+                    detail: "起動時と1分以上離れた後に認証"
+                )
             }
 
             if let securityMessage {
@@ -157,45 +158,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Face ID / Touch IDロック")
-        }
-    }
-
-    private var csvSection: some View {
-        Section {
-            Picker("出力対象", selection: $selectedCSVYear) {
-                Text("すべての年").tag(0)
-                ForEach(availableYears, id: \.self) { year in
-                    Text(verbatim: "\(year)年").tag(year)
-                }
-            }
-
-            Button {
-                makeCSVFile()
-            } label: {
-                Label("CSVファイルを作成", systemImage: "doc.badge.arrow.up")
-            }
-            .disabled(payRecords.isEmpty)
-
-            if let csvFileURL {
-                ShareLink(item: csvFileURL) {
-                    Label("CSVを共有", systemImage: "square.and.arrow.up")
-                }
-            }
-
-            if let csvMessage {
-                Text(csvMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if payRecords.isEmpty {
-                Text("給与明細を登録するとCSV出力できます。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("CSV出力")
-        } footer: {
-            Text("給与明細を年別または全期間で出力します。")
+            settingsSectionHeader("セキュリティ")
         }
     }
 
@@ -204,13 +167,32 @@ struct SettingsView: View {
             NavigationLink {
                 EmployerListView()
             } label: {
-                Label("勤務先管理", systemImage: "building.2")
+                SettingsRowLabel(
+                    systemImage: "building.2",
+                    title: "勤務先管理",
+                    detail: "勤務先とOCR用の控除項目",
+                    trailingValue: "\(employers.count)件"
+                )
+            }
+
+            NavigationLink {
+                CSVExportSettingsView(payRecords: payRecords)
+            } label: {
+                SettingsRowLabel(
+                    systemImage: "tablecells",
+                    title: "CSV出力",
+                    detail: "給与明細を年別または全期間で出力"
+                )
             }
 
             Button(role: .destructive) {
                 showsDeleteConfirmation = true
             } label: {
-                Label("全データ削除", systemImage: "trash")
+                SettingsRowLabel(
+                    systemImage: "trash",
+                    title: "全データ削除",
+                    isDestructive: true
+                )
             }
 
             if let deleteMessage {
@@ -219,7 +201,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("データ管理")
+            settingsSectionHeader("データ管理")
         } footer: {
             Text("全データ削除では勤務先、給与明細、書類、添付ファイルを削除します。")
         }
@@ -228,45 +210,40 @@ struct SettingsView: View {
     private var informationSection: some View {
         Section {
             NavigationLink {
-                PolicyTextView(
-                    title: "免責事項",
-                    paragraphs: [
-                        "本アプリは税務計算アプリではありません。",
-                        "本アプリは確定申告書を作成するものではありません。",
-                        "本アプリは税務助言や申告代行を行いません。",
-                        "登録内容や集計結果は、ユーザーご自身で確認してください。",
-                        "税務判断が必要な場合は、税理士、税務署などの専門窓口にご確認ください。"
-                    ]
-                )
+                DisclaimerView()
             } label: {
-                Label("免責事項", systemImage: "exclamationmark.shield")
+                SettingsRowLabel(systemImage: "exclamationmark.shield", title: "免責事項")
             }
 
             NavigationLink {
-                PolicyTextView(
-                    title: "プライバシーについて",
-                    paragraphs: [
-                        "本アプリはログイン不要で利用できます。",
-                        "勤務先、給与明細、書類情報は端末内に保存されます。",
-                        "給与明細、源泉徴収票、支払調書などの添付ファイルも端末内に保存されます。",
-                        "本アプリは給与情報や添付ファイルを外部サーバーへ送信しません。",
-                        "給与明細のOCR読み取りは端末内で処理され、画像や認識結果を外部のOCRサービスへ送信しません。",
-                        "クラウド同期は行いません。",
-                        "CSV出力や共有は、ユーザー操作によってのみ行われます。共有先の扱いにはご注意ください。"
-                    ]
-                )
+                PrivacyOverviewView()
             } label: {
-                Label("プライバシーについて", systemImage: "lock.shield")
+                SettingsRowLabel(systemImage: "lock.shield", title: "プライバシーについて")
             }
 
             NavigationLink {
                 AppInfoView()
             } label: {
-                Label("アプリ情報", systemImage: "info.circle")
+                SettingsRowLabel(
+                    systemImage: "info.circle",
+                    title: "アプリ情報",
+                    trailingValue: appVersionText
+                )
             }
         } header: {
-            Text("情報")
+            settingsSectionHeader("アプリについて")
         }
+    }
+
+    private var appVersionText: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+    }
+
+    private func settingsSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.primary)
+            .textCase(nil)
     }
 
     private func ensureSettings() {
@@ -340,17 +317,6 @@ struct SettingsView: View {
         }
     }
 
-    private func makeCSVFile() {
-        do {
-            let year = selectedCSVYear == 0 ? nil : selectedCSVYear
-            csvFileURL = try CSVExportService.makePayRecordsCSVFile(payRecords: payRecords, year: year)
-            csvMessage = year.map { "\($0)年のCSVを作成しました。" } ?? "全期間のCSVを作成しました。"
-        } catch {
-            csvFileURL = nil
-            csvMessage = "CSVファイルを作成できませんでした。もう一度お試しください。"
-        }
-    }
-
     private func deleteAllData() {
         let documentFileURLs = documents.compactMap { DocumentFileStore.fileURL(for: $0) }
 
@@ -378,9 +344,6 @@ struct SettingsView: View {
             storedAppTheme = AppTheme.aqua.rawValue
             storedAppIconChoice = AppIconChoice.followTheme.rawValue
             updateAppIcon()
-            selectedCSVYear = 0
-            csvFileURL = nil
-            csvMessage = nil
             securityMessage = nil
             do {
                 try DocumentFileStore.deleteFiles(at: documentFileURLs)
@@ -396,25 +359,239 @@ struct SettingsView: View {
     }
 }
 
-private struct PolicyTextView: View {
+private struct SettingsRowLabel: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let systemImage: String
     let title: String
-    let paragraphs: [String]
+    var detail: String? = nil
+    var trailingValue: String? = nil
+    var isDestructive = false
 
     var body: some View {
-        List {
-            Section {
-                ForEach(paragraphs, id: \.self) { paragraph in
-                    Text(paragraph)
-                        .font(.body)
-                        .padding(.vertical, 4)
+        HStack(spacing: 11) {
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 31, height: 31)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(iconColor)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isDestructive ? Color.red : Color.primary)
+
+                if let detail {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
+
+            Spacer(minLength: 6)
+
+            if let trailingValue {
+                Text(trailingValue)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
         }
-        .navigationTitle(title)
+        .padding(.vertical, detail == nil ? 0 : 2)
+    }
+
+    private var iconColor: Color {
+        isDestructive ? .red : appTheme.accentColor
+    }
+}
+
+private struct CSVExportSettingsView: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let payRecords: [PayRecord]
+
+    @State private var selectedYear = 0
+    @State private var fileURL: URL?
+    @State private var message: String?
+
+    private var availableYears: [Int] {
+        Array(Set(payRecords.map(\.paymentYear))).sorted(by: >)
+    }
+
+    private var selectedRecords: [PayRecord] {
+        guard selectedYear != 0 else {
+            return payRecords
+        }
+        return payRecords.filter { $0.paymentYear == selectedYear }
+    }
+
+    private var targetLabel: String {
+        selectedYear == 0 ? "すべての年" : "\(selectedYear)年"
+    }
+
+    private var expectedFileName: String {
+        selectedYear == 0
+            ? "Dr's Salary_給与明細_全期間.csv"
+            : "Dr's Salary_給与明細_\(selectedYear)年.csv"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 16) {
+                    Image(systemName: "tablecells")
+                        .font(.system(size: 31, weight: .semibold))
+                        .foregroundStyle(appTheme.accentColor)
+                        .frame(width: 38)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("給与明細を\nCSVにまとめる")
+                            .font(.system(size: 26, weight: .bold))
+
+                        Text("表計算ソフトで確認・整理できる形式で出力します。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.bottom, 26)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("出力対象")
+                        .font(.system(size: 17, weight: .bold))
+
+                    HStack {
+                        Text("期間")
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Picker("期間", selection: $selectedYear) {
+                            Text("すべての年").tag(0)
+                            ForEach(availableYears, id: \.self) { year in
+                                Text(verbatim: "\(year)年").tag(year)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fontWeight(.semibold)
+                    }
+                }
+                .padding(.vertical, 20)
+                .overlay(alignment: .top) { Divider() }
+                .overlay(alignment: .bottom) { Divider() }
+
+                VStack(spacing: 0) {
+                    csvSummaryRow(title: "対象データ", value: "\(selectedRecords.count)件")
+                    Divider()
+                    csvSummaryRow(title: "ファイル名", value: expectedFileName, allowsWrapping: true)
+                }
+                .padding(.bottom, 20)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("含まれる内容")
+                        .font(.system(size: 17, weight: .bold))
+
+                    Text("支給年月、勤務先、収入区分、額面、手取り、控除、税金、控除内訳、メモ")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 24)
+
+                if let fileURL {
+                    VStack(spacing: 14) {
+                        Label("\(targetLabel)のCSVを作成しました", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.green)
+
+                        ShareLink(item: fileURL) {
+                            Label("CSVを共有", systemImage: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(appTheme.accentColor)
+                                .frame(maxWidth: .infinity, minHeight: 52)
+                                .background(appTheme.accentColor.opacity(0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: EditorialStyle.cornerRadius, style: .continuous))
+                        }
+                    }
+                } else {
+                    Button(action: makeCSVFile) {
+                        Label("CSVファイルを作成", systemImage: "doc.badge.plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(selectedRecords.isEmpty ? Color.secondary : appTheme.accentColor)
+                            .clipShape(RoundedRectangle(cornerRadius: EditorialStyle.cornerRadius, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedRecords.isEmpty)
+                }
+
+                if let message, fileURL == nil {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                } else if selectedRecords.isEmpty {
+                    Text("選択した期間に給与明細がありません。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                }
+
+                Text("作成したCSVは、共有シートから保存先や送信先を選べます。自動送信は行いません。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 18)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 26)
+            .padding(.bottom, 40)
+        }
+        .tint(appTheme.accentColor)
+        .background(EditorialStyle.pageBackground)
+        .navigationTitle("CSV出力")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: selectedYear) { _, _ in
+            fileURL = nil
+            message = nil
+        }
+    }
+
+    private func csvSummaryRow(title: String, value: String, allowsWrapping: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .frame(width: 94, alignment: .leading)
+
+            Text(value)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .lineLimit(allowsWrapping ? 2 : 1)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.vertical, 14)
+    }
+
+    private func makeCSVFile() {
+        do {
+            let year = selectedYear == 0 ? nil : selectedYear
+            fileURL = try CSVExportService.makePayRecordsCSVFile(payRecords: payRecords, year: year)
+            message = year.map { "\($0)年のCSVを作成しました。" } ?? "全期間のCSVを作成しました。"
+        } catch {
+            fileURL = nil
+            message = "CSVファイルを作成できませんでした。もう一度お試しください。"
+        }
     }
 }
 
 private struct AppInfoView: View {
+    @Environment(\.appTheme) private var appTheme
+
     private var versionText: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
     }
@@ -424,19 +601,265 @@ private struct AppInfoView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                LabeledContent("アプリ名", value: "Dr's Salary")
-                LabeledContent("バージョン", value: versionText)
-                LabeledContent("ビルド", value: buildNumberText)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(appTheme.accentColor)
+
+                        Image(systemName: "yensign")
+                            .font(.system(size: 32, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 68, height: 68)
+                    .shadow(color: appTheme.accentColor.opacity(0.16), radius: 10, y: 5)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Dr's Salary")
+                            .font(.system(size: 25, weight: .bold))
+
+                        Text("医師の収入を、ひとつに。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.bottom, 26)
+
+                Text("複数勤務先の給与・収入と関連書類をまとめ、給与明細の端末内OCRで入力を支援します。")
+                    .font(.body)
+                    .padding(.vertical, 22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .top) { Divider() }
+                    .overlay(alignment: .bottom) { Divider() }
+
+                VStack(spacing: 0) {
+                    infoValueRow(title: "バージョン", value: versionText)
+                    Divider()
+                    infoValueRow(title: "ビルド", value: buildNumberText)
+                }
+                .padding(.bottom, 22)
+
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        PrivacyOverviewView()
+                    } label: {
+                        infoLinkRow(systemImage: "lock.shield", title: "プライバシーについて")
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider()
+
+                    NavigationLink {
+                        DisclaimerView()
+                    } label: {
+                        infoLinkRow(systemImage: "exclamationmark.shield", title: "免責事項")
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            .padding(.bottom, 40)
+        }
+        .background(EditorialStyle.pageBackground)
+        .navigationTitle("アプリ情報")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func infoValueRow(title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+        }
+        .padding(.vertical, 15)
+    }
+
+    private func infoLinkRow(systemImage: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(appTheme.accentColor.opacity(0.11))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: systemImage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(appTheme.accentColor)
             }
 
-            Section {
-                Text("医師の複数勤務先からの給与・収入と関連書類をまとめ、給与明細の端末内OCRで入力を支援するアプリです。")
-                    .font(.body)
-                    .padding(.vertical, 4)
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 13)
+    }
+}
+
+private struct PrivacyOverviewView: View {
+    @Environment(\.appTheme) private var appTheme
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                InformationHero(
+                    systemImage: "lock.shield.fill",
+                    title: "給与情報は\n端末内で管理",
+                    detail: "ログインや外部サーバーへの送信はありません。"
+                )
+
+                HStack(alignment: .top, spacing: 8) {
+                    PrivacyPoint(systemImage: "iphone", title: "端末内\n保存")
+                    PrivacyPoint(systemImage: "icloud.slash", title: "クラウド\n同期なし")
+                    PrivacyPoint(systemImage: "doc.text.viewfinder", title: "OCRも\n端末内処理")
+                }
+                .padding(.vertical, 26)
+
+                Divider()
+
+                InformationReadingSection(
+                    title: "保存される情報",
+                    text: "勤務先、給与明細、書類情報、給与明細・源泉徴収票・支払調書などの添付ファイルは、アプリの端末内領域に保存されます。"
+                )
+
+                InformationReadingSection(
+                    title: "OCR読み取り",
+                    text: "給与明細の画像、PDF、認識結果を外部のOCRサービスへ送信せず、端末内で処理します。"
+                )
+
+                InformationReadingSection(
+                    title: "外部への共有",
+                    text: "CSV出力や共有はユーザーの操作時のみ行われます。共有先での取り扱いをご確認ください。"
+                )
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 26)
+            .padding(.bottom, 40)
+        }
+        .tint(appTheme.accentColor)
+        .background(EditorialStyle.pageBackground)
+        .navigationTitle("プライバシー")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct DisclaimerView: View {
+    @Environment(\.appTheme) private var appTheme
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                InformationHero(
+                    systemImage: "exclamationmark.shield.fill",
+                    title: "収入記録と\n書類整理のために",
+                    detail: "本アプリは税務申告ソフトではありません。",
+                    iconColor: .orange
+                )
+
+                Divider()
+                    .padding(.top, 26)
+
+                InformationReadingSection(
+                    title: "本アプリでできること",
+                    text: "給与・手取り・控除の記録、収入推移の確認、給与明細や源泉徴収票などの整理を支援します。"
+                )
+
+                InformationReadingSection(
+                    title: "本アプリで行わないこと",
+                    text: "税務計算、確定申告書の作成、税務助言、申告代行は行いません。"
+                )
+
+                InformationReadingSection(
+                    title: "登録内容について",
+                    text: "登録内容や集計結果はご自身で確認し、税務判断が必要な場合は税理士や税務署などの専門窓口へご相談ください。"
+                )
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 26)
+            .padding(.bottom, 40)
+        }
+        .tint(appTheme.accentColor)
+        .background(EditorialStyle.pageBackground)
+        .navigationTitle("免責事項")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct InformationHero: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let systemImage: String
+    let title: String
+    let detail: String
+    var iconColor: Color? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: systemImage)
+                .font(.system(size: 31, weight: .semibold))
+                .foregroundStyle(iconColor ?? appTheme.accentColor)
+                .frame(width: 38)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 26, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("アプリ情報")
+    }
+}
+
+private struct PrivacyPoint: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let systemImage: String
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 9) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(appTheme.accentColor)
+        .frame(maxWidth: .infinity, minHeight: 94)
+        .background(appTheme.accentColor.opacity(0.09))
+        .clipShape(RoundedRectangle(cornerRadius: EditorialStyle.cornerRadius, style: .continuous))
+    }
+}
+
+private struct InformationReadingSection: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 17, weight: .bold))
+
+            Text(text)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 24)
     }
 }

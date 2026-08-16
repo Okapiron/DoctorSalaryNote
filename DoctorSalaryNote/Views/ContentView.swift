@@ -145,6 +145,94 @@ extension EnvironmentValues {
     }
 }
 
+enum EditorialStyle {
+    static let cornerRadius: CGFloat = 8
+    static let pageSpacing: CGFloat = 18
+    static let cardPadding: CGFloat = 16
+
+    static var pageBackground: Color {
+        Color(uiColor: .systemGroupedBackground)
+    }
+
+    static var cardBackground: Color {
+        Color(uiColor: .secondarySystemGroupedBackground)
+    }
+
+    static var divider: Color {
+        Color(uiColor: .separator).opacity(0.38)
+    }
+
+    static var titleColor: Color {
+        Color(uiColor: .label)
+    }
+}
+
+struct EditorialCard<Content: View>: View {
+    @Environment(\.appTheme) private var appTheme
+
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(EditorialStyle.cardPadding)
+            .background {
+                RoundedRectangle(cornerRadius: EditorialStyle.cornerRadius, style: .continuous)
+                    .fill(EditorialStyle.cardBackground)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: EditorialStyle.cornerRadius, style: .continuous)
+                            .stroke(EditorialStyle.divider, lineWidth: 0.5)
+                    }
+                    .shadow(color: appTheme.accentColor.opacity(0.06), radius: 8, y: 3)
+            }
+    }
+}
+
+struct EditorialIconBadge: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let systemImage: String
+    var size: CGFloat = 30
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(appTheme.accentColor)
+            .frame(width: size, height: size)
+            .background(appTheme.accentColor.opacity(0.11))
+            .clipShape(Circle())
+    }
+}
+
+struct EditorialSectionHeader: View {
+    let title: String
+    var subtitle: String?
+    var systemImage: String?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let systemImage {
+                EditorialIconBadge(systemImage: systemImage)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(EditorialStyle.titleColor)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var appSettings: [AppSettings]

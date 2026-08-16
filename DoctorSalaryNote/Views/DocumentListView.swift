@@ -18,6 +18,7 @@ struct DocumentListView: View {
 
     @Query(sort: [
         SortDescriptor(\DocumentAttachment.documentYear, order: .reverse),
+        SortDescriptor(\DocumentAttachment.documentMonth, order: .reverse),
         SortDescriptor(\DocumentAttachment.createdAt, order: .reverse)
     ]) private var documents: [DocumentAttachment]
 
@@ -84,17 +85,16 @@ struct DocumentListView: View {
         List {
             Section {
                 Stepper(value: $selectedYear, in: 2000...2100) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: "\(selectedYear)年")
-                            .font(.title3.weight(.semibold))
-                        Text("書類管理は年別で表示します")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: "\(selectedYear)年")
+                        .font(.system(size: 20, weight: .semibold))
+                        .monospacedDigit()
                 }
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color(.systemBackground))
+                .listRowSeparatorTint(EditorialStyle.divider)
             }
 
-            Section("勤務先別の書類状況") {
+            Section {
                 if workplaceSummaries.isEmpty {
                     ContentUnavailableView(
                         "この年の書類状況はまだありません",
@@ -103,36 +103,31 @@ struct DocumentListView: View {
                     )
                 } else {
                     ForEach(workplaceSummaries) { summary in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(summary.employerName)
-                                    .font(.headline)
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                Spacer()
-                                if selectedSummaryID == summary.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(appTheme.accentColor)
-                                        .accessibilityLabel("絞り込み中")
-                                }
-                                Text("\(summary.totalDocumentCount)件")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            HStack(spacing: 18) {
-                                documentStatusText("源泉徴収票", summary.withholdingStatus.label, color: summary.withholdingStatus.color)
-                                documentStatusText("支払調書", summary.paymentStatementStatus.paymentStatementLabel, color: summary.paymentStatementStatus.paymentStatementColor)
-                            }
-                        }
-                        .padding(.vertical, 4)
+                        DocumentWorkplaceSummaryRow(
+                            summary: summary,
+                            isSelected: selectedSummaryID == summary.id
+                        )
                         .contentShape(Rectangle())
                         .onTapGesture {
                             selectedSummaryID = selectedSummaryID == summary.id ? nil : summary.id
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                        .listRowBackground(Color(.systemBackground))
+                        .listRowSeparatorTint(EditorialStyle.divider)
                     }
                 }
+            } header: {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("勤務先別の書類状況")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text("総支給額が多い順")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .textCase(nil)
+                .padding(.bottom, 4)
             }
 
             Section {
@@ -146,23 +141,39 @@ struct DocumentListView: View {
                         } label: {
                             DocumentRow(document: document)
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
+                        .listRowBackground(Color(.systemBackground))
+                        .listRowSeparatorTint(EditorialStyle.divider)
                     }
                     .onDelete(perform: deleteDocuments)
                 }
             } header: {
                 HStack {
                     Text(selectedSummary.map { "\($0.employerName)の書類" } ?? "登録済み書類")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
                     Spacer()
                     if selectedSummaryID != nil {
                         Button("すべて表示") {
                             selectedSummaryID = nil
                         }
                         .font(.caption)
+                    } else {
+                        Text("新しい順")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
+                .textCase(nil)
+                .padding(.bottom, 4)
             }
         }
+        .listStyle(.plain)
+        .listSectionSpacing(16)
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemBackground))
         .navigationTitle("書類")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -177,6 +188,9 @@ struct DocumentListView: View {
                 DocumentFormView(initialYear: selectedYear)
             }
         }
+        .onChange(of: selectedYear) { _, _ in
+            selectedSummaryID = nil
+        }
         .alert("削除できませんでした", isPresented: Binding(
             get: { deletionErrorMessage != nil },
             set: { if !$0 { deletionErrorMessage = nil } }
@@ -187,18 +201,6 @@ struct DocumentListView: View {
         } message: {
             Text(deletionErrorMessage ?? "もう一度お試しください。")
         }
-    }
-
-    private func documentStatusText(_ title: String, _ value: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-        }
-        .lineLimit(1)
     }
 
     private func makeSummary(for employer: Employer?) -> DocumentWorkplaceSummary {
@@ -269,7 +271,7 @@ private enum DocumentStatus: Equatable {
 
     var label: String {
         switch self {
-        case .registered: "登録済み"
+        case .registered: "登録済"
         case .missing: "未登録"
         case .none: "なし"
         }
@@ -298,24 +300,89 @@ private enum DocumentStatus: Equatable {
     }
 }
 
+private struct DocumentWorkplaceSummaryRow: View {
+    @Environment(\.appTheme) private var appTheme
+
+    let summary: DocumentWorkplaceSummary
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(summary.employerName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .lineLimit(1)
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(appTheme.accentColor)
+                        .accessibilityLabel("絞り込み中")
+                }
+
+                Text("\(summary.totalDocumentCount)件")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            HStack(spacing: 2) {
+                documentStatus(
+                    "源泉徴収票",
+                    summary.withholdingStatus.label,
+                    color: summary.withholdingStatus.color
+                )
+                .frame(width: 112, alignment: .leading)
+
+                documentStatus(
+                    "支払調書",
+                    summary.paymentStatementStatus.paymentStatementLabel,
+                    color: summary.paymentStatementStatus.paymentStatementColor
+                )
+            }
+        }
+        .frame(minHeight: 70)
+        .background {
+            if isSelected {
+                appTheme.accentColor.opacity(0.06)
+                    .padding(.horizontal, -8)
+            }
+        }
+    }
+
+    private func documentStatus(_ title: String, _ value: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .fontWeight(.semibold)
+                .foregroundStyle(color)
+        }
+        .font(.system(size: 13))
+        .lineLimit(1)
+    }
+}
+
 private struct DocumentRow: View {
     @Environment(\.appTheme) private var appTheme
 
     let document: DocumentAttachment
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: document.attachmentFileType == .pdf ? "doc.richtext" : "photo")
-                .font(.title3)
-                .foregroundStyle(appTheme.accentColor)
-                .frame(width: 28)
+        HStack(spacing: 10) {
+            EditorialIconBadge(
+                systemImage: document.attachmentFileType == .pdf ? "doc.richtext" : "photo",
+                size: 30
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(document.documentType.label)
-                    .font(.headline)
+                    .font(.system(size: 16, weight: .semibold))
 
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -323,17 +390,17 @@ private struct DocumentRow: View {
             Spacer()
 
             Text(document.attachmentFileType.label)
-                .font(.caption)
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: 62)
     }
 
     private var subtitle: String {
         let employerName = document.employer?.name ?? "勤務先未設定"
-        if let payRecord = document.payRecord {
-            return "\(payRecord.paymentMonth)月・\(employerName)"
-        }
-        return employerName
+        let month = document.documentMonth
+            ?? document.payRecord?.paymentMonth
+            ?? Calendar.current.component(.month, from: document.createdAt)
+        return "\(document.documentYear)年\(month)月 / \(employerName)"
     }
 }

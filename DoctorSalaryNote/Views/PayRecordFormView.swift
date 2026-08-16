@@ -27,6 +27,20 @@ private struct DeductionDraft: Identifiable {
     }
 }
 
+private enum PayPeriodPicker: String, Identifiable {
+    case year
+    case month
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .year: "支給年"
+        case .month: "支給月"
+        }
+    }
+}
+
 struct PayRecordFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -82,6 +96,7 @@ struct PayRecordFormView: View {
     @State private var ocrStatusMessage: String?
     @State private var saveWarningMessage: String?
     @State private var isShowingSaveWarning = false
+    @State private var activePayPeriodPicker: PayPeriodPicker?
     @FocusState private var isTextInputFocused: Bool
 
     init(
@@ -188,17 +203,49 @@ struct PayRecordFormView: View {
                 }
             }
 
+            if let ocrStatusMessage, !isRunningOCR {
+                Section {
+                    Label(
+                        ocrStatusMessage,
+                        systemImage: ocrStatusMessage.contains("要確認")
+                            ? "exclamationmark.triangle.fill"
+                            : "checkmark.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(
+                        ocrStatusMessage.contains("要確認")
+                            ? Color.orange
+                            : appTheme.accentColor
+                    )
+                }
+                .listRowBackground(Color(.systemBackground))
+            }
+
             if payRecord == nil {
                 Section {
                     Button {
                         presentImportOptions()
                     } label: {
-                        Label("書類から取り込む", systemImage: "doc.viewfinder")
-                            .font(.body.weight(.semibold))
+                        HStack(spacing: 12) {
+                            EditorialIconBadge(systemImage: "doc.viewfinder", size: 38)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("給与明細を取り込む")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("写真・画像・PDFから入力をサポート")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
                     }
-                } footer: {
-                    Text("カメラ、写真、PDFから給与明細を読み取り、入力候補をフォームへ反映します。")
                 }
+                .listRowBackground(appTheme.accentColor.opacity(0.10))
+                .listRowSeparator(.hidden)
             }
 
             Section("支給情報") {
@@ -237,21 +284,21 @@ struct PayRecordFormView: View {
                     }
                 }
 
-                Stepper(value: $paymentYear, in: 2000...2100) {
-                    Text(verbatim: "支給年 \(paymentYear)年")
-                }
-
-                Picker("支給月", selection: $paymentMonth) {
-                    ForEach(1...12, id: \.self) { month in
-                        Text("\(month)月").tag(month)
-                    }
-                }
+                payPeriodRow(title: "支給年", value: "\(paymentYear)年", picker: .year)
+                payPeriodRow(title: "支給月", value: "\(paymentMonth)月", picker: .month)
             }
 
             Section {
                 currencyField("額面（必須）", text: $grossAmountText)
                 currencyField("手取り", text: $netAmountText)
                 currencyField("控除合計", text: $deductionAmountText)
+            } header: {
+                Text("金額")
+            } footer: {
+                Text("金額は円単位で保存します。入力内容の整合性は保存前に確認できます。")
+            }
+
+            Section {
                 currencyField("所得税", text: $incomeTaxAmountText)
                 currencyField("住民税", text: $residentTaxAmountText)
 
@@ -298,7 +345,7 @@ struct PayRecordFormView: View {
                     currencyField("その他控除（従来項目）", text: $otherDeductionAmountText)
                 }
             } header: {
-                Text("金額")
+                Text("控除の内訳")
             } footer: {
                 Text("勤務先固有の控除項目は、この勤務先の次回入力とOCRにも引き継がれます。その他は控除合計から所得税・住民税・個別項目を引いた推定値です。")
             }
@@ -348,6 +395,8 @@ struct PayRecordFormView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(EditorialStyle.pageBackground)
         .scrollDismissesKeyboard(.interactively)
         .background {
             Color.clear
@@ -356,7 +405,40 @@ struct PayRecordFormView: View {
                     isTextInputFocused = false
                 }
         }
+        .overlay {
+            if isRunningOCR {
+                ZStack {
+                    Color(.systemBackground)
+                        .opacity(0.80)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(appTheme.accentColor)
+
+                        Text("給与明細を読み取り中")
+                            .font(.headline)
+
+                        Text("画像と文字を端末内で解析しています")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 22)
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(EditorialStyle.divider, lineWidth: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+                }
+                .transition(.opacity)
+            }
+        }
         .navigationTitle(payRecord == nil ? "給与明細追加" : "給与明細編集")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") {
@@ -382,6 +464,11 @@ struct PayRecordFormView: View {
             NavigationStack {
                 EmployerFormView()
             }
+        }
+        .sheet(item: $activePayPeriodPicker) { picker in
+            payPeriodPickerSheet(picker)
+                .presentationDetents([.height(310)])
+                .presentationDragIndicator(.visible)
         }
         .fileImporter(
             isPresented: $isPickingPDF,
@@ -428,7 +515,7 @@ struct PayRecordFormView: View {
             isShowingInitialImportOptions = true
         }
         .confirmationDialog(
-            "今月の記録を取り込む",
+            "給与明細を取り込む",
             isPresented: $isShowingInitialImportOptions,
             titleVisibility: .visible
         ) {
@@ -454,7 +541,6 @@ struct PayRecordFormView: View {
                 Label("PDFを選択", systemImage: "doc")
             }
 
-            Button("手入力で始める") {}
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("給与明細を撮影または選択すると、支給年月や金額の入力候補を読み取ります。PDFはスクリーンショットにせず、そのまま選択できます。")
@@ -523,19 +609,6 @@ struct PayRecordFormView: View {
             Text("保存時に、この給与明細へ給与明細または賞与明細として紐づけます。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            if isRunningOCR {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("書類から入力候補を読み取っています。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if let ocrStatusMessage {
-                Text(ocrStatusMessage)
-                    .font(.caption)
-                    .foregroundStyle(ocrStatusMessage.contains("要確認") ? Color.orange : Color.secondary)
-            }
         }
 
         if let pendingDocumentFileURL {
@@ -620,6 +693,72 @@ struct PayRecordFormView: View {
             .multilineTextAlignment(.trailing)
             .font(.body.monospacedDigit())
             .frame(maxWidth: 180)
+        }
+    }
+
+    private func payPeriodRow(
+        title: String,
+        value: String,
+        picker: PayPeriodPicker
+    ) -> some View {
+        Button {
+            isTextInputFocused = false
+            activePayPeriodPicker = picker
+        } label: {
+            LabeledContent {
+                HStack(spacing: 6) {
+                    Text(value)
+                        .foregroundStyle(appTheme.accentColor)
+                        .monospacedDigit()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            } label: {
+                Text(title)
+                    .foregroundStyle(.primary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title)、\(value)")
+        .accessibilityHint("ダブルタップして選択")
+    }
+
+    @ViewBuilder
+    private func payPeriodPickerSheet(_ picker: PayPeriodPicker) -> some View {
+        NavigationStack {
+            Group {
+                switch picker {
+                case .year:
+                    Picker("支給年", selection: $paymentYear) {
+                        ForEach(2000...2100, id: \.self) { year in
+                            Text(verbatim: "\(year)年")
+                                .tag(year)
+                        }
+                    }
+                case .month:
+                    Picker("支給月", selection: $paymentMonth) {
+                        ForEach(1...12, id: \.self) { month in
+                            Text(verbatim: "\(month)月")
+                                .tag(month)
+                        }
+                    }
+                }
+            }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle(picker.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        activePayPeriodPicker = nil
+                    }
+                }
+            }
         }
     }
 
@@ -807,6 +946,7 @@ struct PayRecordFormView: View {
                     employer: selectedEmployer,
                     payRecord: newRecord,
                     documentYear: paymentYear,
+                    documentMonth: paymentMonth,
                     documentType: pendingDocumentType,
                     title: "",
                     attachmentFileType: pendingDocumentFileType,

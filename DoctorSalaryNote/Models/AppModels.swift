@@ -362,6 +362,7 @@ final class DocumentAttachment {
     var employer: Employer?
     var payRecord: PayRecord?
     var documentYear: Int
+    var documentMonth: Int?
     var documentTypeRaw: String
     var title: String
     var attachmentFileTypeRaw: String
@@ -378,6 +379,7 @@ final class DocumentAttachment {
         employer: Employer? = nil,
         payRecord: PayRecord? = nil,
         documentYear: Int,
+        documentMonth: Int? = nil,
         documentType: DocumentType = .payslip,
         title: String = "",
         attachmentFileType: AttachmentFileType = .other,
@@ -393,6 +395,7 @@ final class DocumentAttachment {
         self.employer = employer
         self.payRecord = payRecord
         self.documentYear = documentYear
+        self.documentMonth = documentMonth
         self.documentTypeRaw = documentType.rawValue
         self.title = title
         self.attachmentFileTypeRaw = attachmentFileType.rawValue
